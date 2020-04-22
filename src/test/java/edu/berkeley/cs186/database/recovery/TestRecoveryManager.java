@@ -278,6 +278,9 @@ public class TestRecoveryManager {
         LogRecord firstLogRecord = logManager.fetchLogRecord(firstLSN);
         LogRecord secondLogRecord = logManager.fetchLogRecord(secondLSN);
 
+        System.out.println("FirstLogRecord: " + firstLogRecord);
+        System.out.println("SecondLogRecord: " + secondLogRecord);
+
         assertTrue(firstLogRecord instanceof UpdatePageLogRecord);
         assertTrue(secondLogRecord instanceof UpdatePageLogRecord);
         assertArrayEquals(before, ((UpdatePageLogRecord) firstLogRecord).before);

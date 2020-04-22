@@ -275,41 +275,54 @@ public class ARIESRecoveryManager implements RecoveryManager {
         // TODO(proj5): implement
 
         long prevLSN = transactionTable.get(transNum).lastLSN;
+        TransactionTableEntry transactionEntry = transactionTable.get(transNum);
 
-        long lastLSN;
+
+
+        long LSNofLastRecord;
 
         UpdatePageLogRecord updatePageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, after);
 
 
-        if (after.length + before.length > BufferManager.EFFECTIVE_PAGE_SIZE / 2){
+        if (after.length > BufferManager.EFFECTIVE_PAGE_SIZE / 2){
             // two records should be written instead :
             // an undo-only record followed by a redo-only record
 
+            System.out.println("Enters if");
+
+
             UpdatePageLogRecord undoPageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, null);
-            this.logManager.appendToLog(undoPageLogRecord);
+            long undoLSN = this.logManager.appendToLog(undoPageLogRecord);
+            System.out.println("Appended undo");
+
 
             UpdatePageLogRecord redoPageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, null, after);
-            lastLSN = this.logManager.appendToLog(redoPageLogRecord);
+            LSNofLastRecord = this.logManager.appendToLog(redoPageLogRecord);
+            System.out.println("Appended redo");
+
+            transactionEntry.lastLSN = LSNofLastRecord;
+            transactionEntry.touchedPages.add(pageNum);
+            // Flush log
+            logManager.flushToLSN(LSNofLastRecord);
 
         }else {
 
-            lastLSN = this.logManager.appendToLog(updatePageLogRecord);
+            this.logManager.appendToLog(updatePageLogRecord);
+            LSNofLastRecord = this.logAllocPage(transNum, pageNum);
 
         }
 
         System.out.println("PageNum: " + pageNum);
 
-        long LSNofRecord = this.logAllocPage(transNum, pageNum);
-
-        System.out.println("LSNofRecord: " + LSNofRecord);
+        System.out.println("LSNofRecord: " + LSNofLastRecord);
 
         if (!this.dirtyPageTable.containsKey(pageNum)) {
-            this.dirtyPageTable.put(pageNum, LSNofRecord);
+            this.dirtyPageTable.put(pageNum, LSNofLastRecord);
         }
         System.out.println("DPT: " + this.dirtyPageTable);
 
 
-        return LSNofRecord;
+        return LSNofLastRecord;
 
 
     }
