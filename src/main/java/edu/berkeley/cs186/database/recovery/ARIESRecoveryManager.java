@@ -147,7 +147,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
     public long abort(long transNum) {
         // TODO(proj5): implement
 
-
         System.out.println("In abort()");
         // get lastLSN of Xact from Xact table
         TransactionTableEntry transactionEntry = this.transactionTable.get(transNum);
@@ -185,17 +184,19 @@ public class ARIESRecoveryManager implements RecoveryManager {
         
         if (transactionEntry.transaction.getStatus() == Transaction.Status.ABORTING) {
             long lastLSN = transactionEntry.lastLSN;
-            Optional<Long> prevLSN = lastLSN != 0 ? Optional.of(lastLSN) : Optional.empty();
+            LogRecord logRecord = this.logManager.fetchLogRecord(lastLSN);
+            Optional<Long> prevLSN = logRecord.getPrevLSN();
             Long clrLSN = -1L;
             
             while (prevLSN.isPresent()) {
-                LogRecord logRecord = this.logManager.fetchLogRecord(prevLSN.get());
-                
                 // only records that are undoable should be undone
                 if(logRecord.isUndoable()) {
+                    // last LSN for CLR, which refers to the prevLSN of the current record to be undone
                     Pair<LogRecord, Boolean> p = logRecord.undo(prevLSN.get());
                     LogRecord clr = p.getFirst();   
-                    // call redo on return CLP 
+                    // prevLSN would end up as the LSN of the most recent CLR.
+                    clr.setLSN(prevLSN.get());
+                    // call redo on return CLR
                     clr.redo(diskSpaceManager, bufferManager);
                     clrLSN = clr.LSN;
                     /** a boolean that is true
@@ -204,11 +205,12 @@ public class ARIESRecoveryManager implements RecoveryManager {
                      */
                     if (p.getSecond()) {
                         this.logManager.flushToLSN(clr.getLSN());
-                    }
+                    } 
                     this.logManager.appendToLog(clr);
-
-                    prevLSN = logRecord.getPrevLSN();
+                    transactionEntry.lastLSN = clr.getLSN();
                 }
+                logRecord = this.logManager.fetchLogRecord(prevLSN.get());
+                prevLSN = logRecord.getPrevLSN();
             }
 
             this.transactionTable.remove(transNum);
