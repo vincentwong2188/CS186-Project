@@ -111,7 +111,25 @@ public class ARIESRecoveryManager implements RecoveryManager {
     @Override
     public long commit(long transNum) {
         // TODO(proj5): implement
-        return -1L;
+
+        // Emits a Record: writing a log record to the log.
+        long prevLSN = transactionTable.get(transNum).lastLSN;
+        CommitTransactionLogRecord logRecord = new CommitTransactionLogRecord(transNum, prevLSN);
+        this.logManager.appendToLog(logRecord);
+
+        // Flushing the Log to the Log Disk Device
+        long flushedLSN = this.logManager.getFlushedLSN();
+        this.logManager.flushToLSN(flushedLSN);
+
+        // Updating transaction table and the transaction status
+
+        System.out.println(LogManagerImpl.getLSNPage(logRecord.LSN));
+
+        long logRecordLSN = this.logAllocPage(transNum, LogManagerImpl.getLSNPage(logRecord.LSN));
+
+        System.out.println("logRecordLSN = " + logRecordLSN);
+
+        return logRecordLSN;
     }
 
     /**
@@ -126,6 +144,8 @@ public class ARIESRecoveryManager implements RecoveryManager {
     @Override
     public long abort(long transNum) {
         // TODO(proj5): implement
+
+
         return -1L;
     }
 
@@ -197,6 +217,27 @@ public class ARIESRecoveryManager implements RecoveryManager {
         assert (before.length == after.length);
 
         // TODO(proj5): implement
+
+//        long prevLSN = transactionTable.get(transNum).lastLSN;
+//
+//        UpdatePageLogRecord updatePageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, after);
+//
+//        if (after.length > BufferManager.EFFECTIVE_PAGE_SIZE / 2){
+//            // two records should be written instead :
+//            // an undo-only record followed by a redo-only record
+//
+//            if(updatePageLogRecord.isUndoable()){
+//                updatePageLogRecord.undo(prevLSN);
+//            }
+//
+//        }else {
+//
+//
+//
+//        }
+
+
+
         return -1L;
     }
 
@@ -283,6 +324,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
     public long logAllocPage(long transNum, long pageNum) {
         // Ignore if part of the log.
         if (DiskSpaceManager.getPartNum(pageNum) == 0) {
+            System.out.println("enters here");
             return -1L;
         }
 
@@ -293,6 +335,9 @@ public class ARIESRecoveryManager implements RecoveryManager {
         LogRecord record = new AllocPageLogRecord(transNum, pageNum, prevLSN);
         long LSN = logManager.appendToLog(record);
         // Update lastLSN, touchedPages
+
+        System.out.println("lastLSN value of transactionEntry = " + LSN);
+
         transactionEntry.lastLSN = LSN;
         transactionEntry.touchedPages.add(pageNum);
         // Flush log

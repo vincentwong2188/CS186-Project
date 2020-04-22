@@ -73,6 +73,10 @@ public class TestRecoveryManager {
         recoveryManager.logPageWrite(1L, pageNum, pageOffset, before, after);
         long LSN1 = recoveryManager.commit(1L);
 
+        System.out.println("LSN1 = " + LSN1);
+        System.out.println("transactionTable.get(1).lastLSN = " + transactionTable.get(1L).lastLSN);
+
+
         assertEquals(LSN1, transactionTable.get(1L).lastLSN);
         assertEquals(Transaction.Status.COMMITTING, transactionTable.get(1L).transaction.getStatus());
 
