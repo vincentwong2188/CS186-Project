@@ -112,26 +112,20 @@ public class ARIESRecoveryManager implements RecoveryManager {
     public long commit(long transNum) {
         // TODO(proj5): implement
 
-        // Emits a Record: writing a log record to the log.
+        // 1. Emits a Record: writing a log record to the log.
+        TransactionTableEntry transactionEntry = this.transactionTable.get(transNum);
         long prevLSN = transactionTable.get(transNum).lastLSN;
-        CommitTransactionLogRecord logRecord = new CommitTransactionLogRecord(transNum, prevLSN);
-        long upToDateLSN = this.logManager.appendToLog(logRecord);
+        CommitTransactionLogRecord commitLogRecord = new CommitTransactionLogRecord(transNum, prevLSN);
+        long LSN = this.logManager.appendToLog(commitLogRecord);
 
-        // Flushing the Log to the Log Disk Device
-        long flushedLSN = this.logManager.getFlushedLSN();
-        this.logManager.flushToLSN(flushedLSN);
+        // 2. Flushing the Log to the Log Disk Device
+        this.logManager.flushToLSN(LSN);
 
-        // Updating transaction table and the transaction status
+        // 3. Updating transaction table and the transaction status
+        transactionEntry.transaction.setStatus(Transaction.Status.COMMITTING);
+        transactionEntry.lastLSN = LSN;
 
-//        long logRecordLSN = this.logAllocPage(transNum, LogManagerImpl.getLSNPage(logRecord.LSN));
-
-        long logRecordLSN = this.logAllocPage(transNum, LogManagerImpl.getLSNPage(upToDateLSN));
-
-
-//        System.out.println("logRecordLSN = " + logRecordLSN);
-
-        return logRecordLSN;
-
+        return LSN;
     }
 
     /**
@@ -279,50 +273,32 @@ public class ARIESRecoveryManager implements RecoveryManager {
         long prevLSN = transactionTable.get(transNum).lastLSN;
         TransactionTableEntry transactionEntry = transactionTable.get(transNum);
 
-
-
         long LSNofLastRecord;
 
         UpdatePageLogRecord updatePageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, after);
 
 
-        if (after.length > BufferManager.EFFECTIVE_PAGE_SIZE / 2){
+        if (after.length + before.length > BufferManager.EFFECTIVE_PAGE_SIZE / 2){
             // two records should be written instead :
             // an undo-only record followed by a redo-only record
 
-            System.out.println("Enters if");
-
-
             UpdatePageLogRecord undoPageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, null);
             long undoLSN = this.logManager.appendToLog(undoPageLogRecord);
-            System.out.println("Appended undo");
-
 
             UpdatePageLogRecord redoPageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, null, after);
             LSNofLastRecord = this.logManager.appendToLog(redoPageLogRecord);
-            System.out.println("Appended redo");
-
-            transactionEntry.lastLSN = LSNofLastRecord;
-            transactionEntry.touchedPages.add(pageNum);
-            // Flush log
-            logManager.flushToLSN(LSNofLastRecord);
 
         }else {
-
-            this.logManager.appendToLog(updatePageLogRecord);
-            LSNofLastRecord = this.logAllocPage(transNum, pageNum);
-
+            LSNofLastRecord = this.logManager.appendToLog(updatePageLogRecord);
         }
 
-        System.out.println("PageNum: " + pageNum);
+        transactionEntry.lastLSN = LSNofLastRecord;
+        transactionEntry.touchedPages.add(pageNum);
 
-        System.out.println("LSNofRecord: " + LSNofLastRecord);
 
         if (!this.dirtyPageTable.containsKey(pageNum)) {
             this.dirtyPageTable.put(pageNum, LSNofLastRecord);
         }
-        System.out.println("DPT: " + this.dirtyPageTable);
-
 
         return LSNofLastRecord;
 
