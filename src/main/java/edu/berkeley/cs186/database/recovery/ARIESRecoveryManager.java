@@ -148,7 +148,22 @@ public class ARIESRecoveryManager implements RecoveryManager {
         // TODO(proj5): implement
 
 
-        return -1L;
+        System.out.println("In abort()");
+        // get lastLSN of Xact from Xact table
+        TransactionTableEntry transactionEntry = this.transactionTable.get(transNum);
+        // update transaction status
+        transactionEntry.transaction.setStatus(Transaction.Status.ABORTING);
+        
+        // write an ABORT record to the log before starting to rollback operations
+        long lastLSN = transactionEntry.lastLSN;
+        AbortTransactionLogRecord abortTransactionLogRecord = new AbortTransactionLogRecord(transNum, lastLSN);
+        this.logManager.appendToLog(abortTransactionLogRecord);
+        Long abortLogLSN = abortTransactionLogRecord.getLSN();
+        
+        // set transaction's lastLSN to the LSN of this abort log record
+        transactionEntry.lastLSN = abortLogLSN;
+    
+        return abortLogLSN;
     }
 
     /**
@@ -165,6 +180,45 @@ public class ARIESRecoveryManager implements RecoveryManager {
     @Override
     public long end(long transNum) {
         // TODO(proj5): implement
+        // get lastLSN of Xact from Xact table
+        TransactionTableEntry transactionEntry = this.transactionTable.get(transNum);
+        
+        if (transactionEntry.transaction.getStatus() == Transaction.Status.ABORTING) {
+            long lastLSN = transactionEntry.lastLSN;
+            Optional<Long> prevLSN = lastLSN != 0 ? Optional.of(lastLSN) : Optional.empty();
+            Long clrLSN = -1L;
+            
+            while (prevLSN.isPresent()) {
+                LogRecord logRecord = this.logManager.fetchLogRecord(prevLSN.get());
+                
+                // only records that are undoable should be undone
+                if(logRecord.isUndoable()) {
+                    Pair<LogRecord, Boolean> p = logRecord.undo(prevLSN.get());
+                    LogRecord clr = p.getFirst();   
+                    // call redo on return CLP 
+                    clr.redo(diskSpaceManager, bufferManager);
+                    clrLSN = clr.LSN;
+                    /** a boolean that is true
+                     *  if the log must be flushed up to the CLR after executing the undo,
+                     *  and false otherwise.
+                     */
+                    if (p.getSecond()) {
+                        this.logManager.flushToLSN(clr.getLSN());
+                    }
+                    this.logManager.appendToLog(clr);
+
+                    prevLSN = logRecord.getPrevLSN();
+                }
+            }
+
+            this.transactionTable.remove(transNum);
+            // find the LSN of the most recent CLR
+            EndTransactionLogRecord endTransactionLogRecord = new EndTransactionLogRecord(transNum, clrLSN);
+            this.logManager.appendToLog(endTransactionLogRecord);
+            
+            return endTransactionLogRecord.getLSN();
+        }
+
         return -1L;
     }
 
