@@ -1,0 +1,37 @@
+1. Forward Processing
+
+All in ARIESRecoveryManager.java
+
+a. Transaction Status
+    -commit()
+
+    -abort()
+
+    -end()
+
+b. Logging
+    -logPageWrite()
+
+c. Savepoints
+    -rollbackToSavepoint()
+
+d. Checkpoints
+    -checkpoint()
+
+
+2. Restart Recovery
+
+All in ARIESRecoveryManager.java
+
+- restart()
+- restartAnalysis()
+- restartRedo()
+- restartUndo()
+
+3. Tying it All Up
+
+In Database.java, subClass TransactionImpl
+(Database::TransactionImpl)
+
+- startCommit()
+(This is just removing a line of code and replacing it with the commented code, and sets up the database to use recovery.)
