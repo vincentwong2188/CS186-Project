@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.046" tests="4" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.089" tests="4" errors="0" skipped="0" failures="0">
   <properties>
     <property name="awt.toolkit" value="sun.awt.X11.XToolkit"/>
     <property name="file.encoding.pkg" value="sun.io"/>
@@ -16,7 +16,7 @@
     <property name="user.country" value="US"/>
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="sun.boot.library.path" value="/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64"/>
-    <property name="sun.java.command" value="/cs186/csw186_proj5/target/surefire/surefirebooter7887413825650286476.jar /cs186/csw186_proj5/target/surefire 2020-04-20T16-08-51_443-jvmRun1 surefire6031488822808711662tmp surefire_08121049189028043425tmp"/>
+    <property name="sun.java.command" value="/cs186/csw186_proj5/target/surefire/surefirebooter7978347107967586780.jar /cs186/csw186_proj5/target/surefire 2020-04-22T15-41-58_260-jvmRun1 surefire1033725616456964435tmp surefire_07724080585898355978tmp"/>
     <property name="surefire.test.class.path" value="/cs186/csw186_proj5/target/test-classes:/cs186/csw186_proj5/target/classes:/home/ubuntu/.m2/repository/junit/junit/4.12/junit-4.12.jar:/home/ubuntu/.m2/repository/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar:"/>
     <property name="sun.cpu.endian" value="little"/>
     <property name="user.home" value="/home/ubuntu"/>
@@ -29,7 +29,7 @@
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
     <property name="java.awt.graphicsenv" value="sun.awt.X11GraphicsEnvironment"/>
-    <property name="surefire.real.class.path" value="/cs186/csw186_proj5/target/surefire/surefirebooter7887413825650286476.jar"/>
+    <property name="surefire.real.class.path" value="/cs186/csw186_proj5/target/surefire/surefirebooter7978347107967586780.jar"/>
     <property name="sun.boot.class.path" value="/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/resources.jar:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/rt.jar:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/sunrsasign.jar:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/jsse.jar:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/jce.jar:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/charsets.jar:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/jfr.jar:/usr/lib/jvm/java-8-openjdk-amd64/jre/classes"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="1.8.0_181-8u181-b13-0ubuntu0.16.04.1-b13"/>
@@ -59,7 +59,7 @@
     <property name="java.class.version" value="52.0"/>
   </properties>
   <testcase name="testStudentAnalysis" classname="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0"/>
-  <testcase name="testStudentIntegration" classname="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.013"/>
-  <testcase name="testStudentRedo" classname="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.016"/>
-  <testcase name="testStudentUndo" classname="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.016"/>
+  <testcase name="testStudentIntegration" classname="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.02"/>
+  <testcase name="testStudentRedo" classname="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.033"/>
+  <testcase name="testStudentUndo" classname="edu.berkeley.cs186.database.recovery.TestARIESStudentRunner" time="0.033"/>
 </testsuite>
