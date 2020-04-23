@@ -4,14 +4,14 @@ All in ARIESRecoveryManager.java
 
 a. Transaction Status
     -commit()
-
+    DONE
     -abort()
-
+    DONE
     -end()
-
+    DONE
 b. Logging
     -logPageWrite()
-
+    DONE
 c. Savepoints
     -rollbackToSavepoint()
 

@@ -171,28 +171,34 @@ public class ARIESRecoveryManager implements RecoveryManager {
      * @return LSN of the end record
      */
     @Override
+    // TestRecoveryManager.testAbortingEnd:957 expected:<{10000000001=70000}> but was:<{}>
     public long end(long transNum) {
         // TODO(proj5): implement
         // get lastLSN of Xact from Xact table
         TransactionTableEntry transactionEntry = this.transactionTable.get(transNum);
+        long lastLSN = transactionEntry.lastLSN;
+        EndTransactionLogRecord endTransactionLogRecord;
         
         if (transactionEntry.transaction.getStatus() == Transaction.Status.ABORTING) {
-            long lastLSN = transactionEntry.lastLSN;
-            LogRecord logRecord = this.logManager.fetchLogRecord(lastLSN);
-            Optional<Long> prevLSN = logRecord.getPrevLSN();
-            Long clrLSN = -1L;
+            long clrLSN = -1L;
+            LogRecord logRecord;
             
-            while (prevLSN.isPresent()) {
+            while (lastLSN > 0) {
+                // System.out.println("lastLSN: " + lastLSN);
+                logRecord = this.logManager.fetchLogRecord(lastLSN);
                 // only records that are undoable should be undone
                 if(logRecord.isUndoable()) {
-                    // last LSN for CLR, which refers to the prevLSN of the current record to be undone
-                    Pair<LogRecord, Boolean> p = logRecord.undo(prevLSN.get());
-                    LogRecord clr = p.getFirst();   
-                    // prevLSN would end up as the LSN of the most recent CLR.
-                    clr.setLSN(prevLSN.get());
+                    // last LSN for CLR, i.e. lastLSN of the transaction
+                    Pair<LogRecord, Boolean> p = logRecord.undo(transactionEntry.lastLSN);
+                    LogRecord clr = p.getFirst(); 
+                    long pageNum = clr.getPageNum().isPresent() ? clr.getPageNum().get() : -1L;
+                    clrLSN = this.logManager.appendToLog(clr);
+                    // add edited page (if it exists) by CLR into DPT
+                    if (transactionEntry.touchedPages.contains(pageNum) && !this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
+                        this.dirtyPageTable.put(pageNum, clrLSN);
+                    }
                     // call redo on return CLR
                     clr.redo(diskSpaceManager, bufferManager);
-                    clrLSN = clr.LSN;
                     /** a boolean that is true
                      *  if the log must be flushed up to the CLR after executing the undo,
                      *  and false otherwise.
@@ -200,22 +206,24 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     if (p.getSecond()) {
                         this.logManager.flushToLSN(clr.getLSN());
                     } 
-                    this.logManager.appendToLog(clr);
-                    transactionEntry.lastLSN = clr.getLSN();
+                    
+                    transactionEntry.lastLSN = clrLSN;
                 }
-                logRecord = this.logManager.fetchLogRecord(prevLSN.get());
-                prevLSN = logRecord.getPrevLSN();
+                lastLSN = logRecord.getPrevLSN().get();
             }
-
             this.transactionTable.remove(transNum);
-            // find the LSN of the most recent CLR
-            EndTransactionLogRecord endTransactionLogRecord = new EndTransactionLogRecord(transNum, clrLSN);
-            this.logManager.appendToLog(endTransactionLogRecord);
-            
-            return endTransactionLogRecord.getLSN();
         }
 
-        return -1L;
+        // find the LSN of the most recent CLR (if there is), i.e. the last entry
+        endTransactionLogRecord = new EndTransactionLogRecord(transNum, transactionEntry.lastLSN);
+        this.logManager.appendToLog(endTransactionLogRecord);
+
+        // update transaction status
+        transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
+
+        this.transactionTable.remove(transNum);
+
+        return endTransactionLogRecord.getLSN();
     }
 
     /**
