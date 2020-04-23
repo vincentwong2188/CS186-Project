@@ -17,6 +17,8 @@ c. Savepoints
 
 d. Checkpoints
     -checkpoint()
+    DONE
+
 
 
 2. Restart Recovery
