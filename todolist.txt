@@ -8,7 +8,7 @@ a. Transaction Status
     -abort()
     DONE
     -end()
-    testEnd() solved, testUndoCLR() (for restart) & testAbortingEnd()
+    DONE
 b. Logging
     -logPageWrite()
     DONE
