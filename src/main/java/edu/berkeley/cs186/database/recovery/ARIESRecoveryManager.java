@@ -270,16 +270,12 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         // TODO(proj5): implement
 
+        // Initialising some variables required
         long prevLSN = transactionTable.get(transNum).lastLSN;
-        TransactionTableEntry transactionEntry = transactionTable.get(transNum);
-
         long LSNofLastRecord;
 
-        UpdatePageLogRecord updatePageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, after);
-
-
-        if (after.length + before.length > BufferManager.EFFECTIVE_PAGE_SIZE / 2){
-            // two records should be written instead :
+        if (after.length > BufferManager.EFFECTIVE_PAGE_SIZE / 2){
+            // Two records should be emitted instead :
             // an undo-only record followed by a redo-only record
 
             UpdatePageLogRecord undoPageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, null);
@@ -289,20 +285,22 @@ public class ARIESRecoveryManager implements RecoveryManager {
             LSNofLastRecord = this.logManager.appendToLog(redoPageLogRecord);
 
         }else {
+            // Just one Log Record is emitted
+            UpdatePageLogRecord updatePageLogRecord = new UpdatePageLogRecord(transNum, pageNum, prevLSN, pageOffset, before, after);
             LSNofLastRecord = this.logManager.appendToLog(updatePageLogRecord);
         }
 
+        // Updates Transaction Table
+        TransactionTableEntry transactionEntry = transactionTable.get(transNum);
         transactionEntry.lastLSN = LSNofLastRecord;
         transactionEntry.touchedPages.add(pageNum);
 
-
+        // Updates Dirty Page Table (only if DPT doesn't already contain the pageID)
         if (!this.dirtyPageTable.containsKey(pageNum)) {
             this.dirtyPageTable.put(pageNum, LSNofLastRecord);
         }
 
         return LSNofLastRecord;
-
-
     }
 
     /**
@@ -522,6 +520,59 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         // TODO(proj5): generate end checkpoint record(s) for DPT and transaction table
 
+        // 1. Iterate through the dirtyPageTable and copy the entries. If at any point, copying the
+        // current record would cause the end checkpoint record to be too large,
+        // an end checkpoint record with the copied DPT entries should be appended to the log.
+        for (Map.Entry<Long, Long> dirtyPage : this.dirtyPageTable.entrySet()) {
+            long pageNum = dirtyPage.getKey();
+            long recLSN = dirtyPage.getValue();
+            boolean fitsAfterAdd3 = EndCheckpointLogRecord.fitsInOneRecord(dpt.size() + 1, txnTable.size(), touchedPages.size(), numTouchedPages);
+
+            if (!fitsAfterAdd3){
+                // Emit EndRecord into logManager since it no longer fits
+                LogRecord endRecord = new EndCheckpointLogRecord(dpt, txnTable, touchedPages);
+                logManager.appendToLog(endRecord);
+
+                // Reset counts to recopy the to-be-added new data into the storages
+                dpt.clear();
+                txnTable.clear();
+                touchedPages.clear();
+                numTouchedPages = 0;
+            }
+
+            // Copy the (pageNum, recLSN) tuple into the dpt HashMap
+            dpt.put(pageNum, recLSN);
+        }
+
+        // 2. Iterate through the transaction table, and copy the status/lastLSN, outputting end checkpoint records only as needed.
+        for (Map.Entry<Long, TransactionTableEntry> entry2 : transactionTable.entrySet()) {
+            long transNum2 = entry2.getKey();
+            long lastLSN = entry2.getValue().lastLSN;
+            Transaction.Status status = entry2.getValue().transaction.getStatus();
+
+            boolean fitsAfterAdd2 = EndCheckpointLogRecord.fitsInOneRecord(dpt.size(), txnTable.size() + 1, touchedPages.size(), numTouchedPages);
+
+            if (!fitsAfterAdd2){
+                // Emit EndRecord into logManager since it no longer fits
+                LogRecord endRecord = new EndCheckpointLogRecord(dpt, txnTable, touchedPages);
+                logManager.appendToLog(endRecord);
+
+                // Reset counts to recopy the to-be-added new data into the storages
+                dpt.clear();
+                txnTable.clear();
+                touchedPages.clear();
+                numTouchedPages = 0;
+            }
+
+            // Copy the (Transaction Number, (Status, lastLSN)) tuple into the txnTable HashMap
+            Pair<Transaction.Status, Long> statusLSNPair = new Pair<>(status, lastLSN);
+            txnTable.put(transNum2, statusLSNPair);
+        }
+
+        // 3. Iterate through the transaction table, and copy the touched pages,
+        // outputting end checkpoint records only as needed.
+        // Transactions without any touched pages should not appear here at all.
+
         for (Map.Entry<Long, TransactionTableEntry> entry : transactionTable.entrySet()) {
             long transNum = entry.getKey();
             for (long pageNum : entry.getValue().touchedPages) {
@@ -550,9 +601,9 @@ public class ARIESRecoveryManager implements RecoveryManager {
             }
         }
 
-        // Last end checkpoint record
-        LogRecord endRecord = new EndCheckpointLogRecord(dpt, txnTable, touchedPages);
-        logManager.appendToLog(endRecord);
+        // 4. Output one final end checkpoint.
+        LogRecord endRecord2 = new EndCheckpointLogRecord(dpt, txnTable, touchedPages);
+        logManager.appendToLog(endRecord2);
 
         // Update master record
         MasterLogRecord masterRecord = new MasterLogRecord(beginLSN);
