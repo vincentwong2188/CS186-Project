@@ -537,25 +537,12 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
 
         while (lastLSN > savepointLSN) {
-            // System.out.println("lastLSN: " + lastLSN);
 
             logRecord = this.logManager.fetchLogRecord(lastLSN);
-//            System.out.println("fetch");
-            // only records that are undoable should be undone
-
-//            System.out.println("lastLSN before loop: " + lastLSN);
-//            if (logRecord.getUndoNextLSN().isPresent()) {
-//                System.out.println("Special loop entered");
-//                lastLSN = logRecord.getUndoNextLSN().get();
-//                logRecord = this.logManager.fetchLogRecord(lastLSN);
-//            }
-//            System.out.println("lastLSN after loop: " + lastLSN);
-
 
             if(logRecord.isUndoable()) {
                 // last LSN for CLR, i.e. lastLSN of the transaction
-
-
+                
                 Pair<LogRecord, Boolean> p = logRecord.undo(transactionEntry.lastLSN);
                 LogRecord clr = p.getFirst();
                 long pageNum = clr.getPageNum().isPresent() ? clr.getPageNum().get() : -1L;
