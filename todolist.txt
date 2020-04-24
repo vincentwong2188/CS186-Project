@@ -28,6 +28,11 @@ All in ARIESRecoveryManager.java
 
 - restart()
 - restartAnalysis()
+    * Transaction Operations :: Part Records (NOT DONE, not sure on what to do with undoPart)
+    * Transaction Operations :: Page Records (NOT DONE on individual functionalities)
+    * Transaction Status Change Records (DONE)
+    * Checkpoint Records (DONE)
+    * Final Cleanup (DONE)
 - restartRedo()
 - restartUndo()
 
