@@ -221,7 +221,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
                             this.dirtyPageTable.remove(pageNum);
                         }
                     }
-                    
+
 
                     // call redo on return CLR
                     /** a boolean that is true
@@ -528,7 +528,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         // TODO(proj5): implement
 
-        // TODO START END()
         long lastLSN = transactionEntry.lastLSN;
 
 //        EndTransactionLogRecord endTransactionLogRecord;
@@ -543,10 +542,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
 //            System.out.println("fetch");
             // only records that are undoable should be undone
 
-            if (logRecord.getUndoNextLSN().isPresent()){
-                //this means the next record is also a CLR (for the nested case)
-                // we should therefore skip this CLR
-            }
             if(logRecord.isUndoable()) {
                 // last LSN for CLR, i.e. lastLSN of the transaction
 
@@ -556,13 +551,18 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 long pageNum = clr.getPageNum().isPresent() ? clr.getPageNum().get() : -1L;
                 // Emit CLR
 
-
                 clrLSN = this.logManager.appendToLog(clr);
-
-//                System.out.println("Pagenum: " + pageNum);
-//                System.out.println("clrLSN: " + clrLSN);
-
-
+                
+                // Replaced the above commented out code with the following code:
+                // Check for special dirty page table updates for UndoUpdatePageRecord and for UndoAllocPageRecord.
+                // ie. We only update the dirty page table if we are undoing a page update
+                // (add to DPT if not already there) or undoing a page allocation (remove from DPT if there)
+                // Additional Info: some clr operations can potentially dirty pages (notably UndoUpdate),
+                // so we have to add the page that it changes to the dirty page table as a result.
+                // Similarly, the clr record UndoAllocPage should remove the corresponding page from the dirty page table
+                // (as we are undoing the operation that allocated the page in the first place).
+                // For every other type of clr record, they either don't operate on pages or just don't concern
+                // the dirty page table; so in that case, we don't even need to worry about page num.
                 if (clr instanceof UndoUpdatePageLogRecord) {
                     // add edited page (if it exists) by CLR into DPT
                     if (!this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
@@ -580,8 +580,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
                  */
                 if (p.getSecond()) {
                     this.logManager.flushToLSN(clr.getLSN());
-//                    System.out.println("flush");
-
                 }
 
                 // call redo on return CLR
@@ -592,9 +590,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
             }
             lastLSN = logRecord.getPrevLSN().get();
 
-
-            System.out.println(this.dirtyPageTable);
-
         }
 
         transactionEntry.lastLSN = savepointLSN;
@@ -602,10 +597,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
         // update transaction status
         transactionEntry.transaction.setStatus(Transaction.Status.RUNNING);
 
-        // TODO END END()
-
-
-        return;
     }
 
     /**
