@@ -651,7 +651,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
             // The following loop is to take into account Nested Rollbacks to save on redos
             // Logic: taking the latest record, getting its undoNextLSN, and then start rolling back from that
             // record on instead of rolling back on the already rolled-back LSNs by a previous parent nested rollback
-            if (lowerLimit != 0L && logRecord.getUndoNextLSN().isPresent()) {
+            if (logRecord.getUndoNextLSN().isPresent()) {
                 lastLSN = logRecord.getUndoNextLSN().get();
             }
         }
