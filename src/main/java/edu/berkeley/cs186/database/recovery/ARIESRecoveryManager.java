@@ -743,7 +743,61 @@ public class ARIESRecoveryManager implements RecoveryManager {
      */
     void restartRedo() {
         // TODO(proj5): implement
-        return;
+
+        Long lowestRecLSN = Long.MAX_VALUE;
+        long pageNumForLowestRecLSN;
+
+        // Obtain the lowest recLSN currently in the DPT
+        for (Map.Entry<Long, Long> dirtyPage : this.dirtyPageTable.entrySet()) {
+//            long pageNum = dirtyPage.getKey();
+            Long recLSN = dirtyPage.getValue();
+
+            if (recLSN < lowestRecLSN){
+                lowestRecLSN = recLSN;
+            }
+        }
+
+        // Obtain the logRecord with the lowest recLSN value in the DPT
+        LogRecord logRecord = this.logManager.fetchLogRecord(lowestRecLSN);
+
+
+        long pageNum = logRecord.getPageNum().isPresent()? logRecord.getPageNum().get() : -1L;
+
+        // We redo a record only if it is a redoable record and
+        if (logRecord.isRedoable() &&
+                // either it is a partition-related record, or it is a page-related record
+                !(logRecord instanceof AbortTransactionLogRecord) &&
+                !(logRecord instanceof CommitTransactionLogRecord) &&
+                !(logRecord instanceof EndTransactionLogRecord) &&
+                !(logRecord instanceof BeginCheckpointLogRecord) &&
+                !(logRecord instanceof EndCheckpointLogRecord) &&
+                !(logRecord instanceof MasterLogRecord)){
+
+            // Only redo under the following conditions
+            if ( (this.dirtyPageTable.containsKey(pageNum)) &&
+                    (this.dirtyPageTable.get(pageNum) <= lowestRecLSN) &&
+                    ( 1==1 // TODO
+                            // REFER TO PAGE class
+                            //getPageLSN() can be found in the Page class.
+                            // Check out https://github.com/berkeley-cs186/sp20-moocbase/blob/master/proj5-README.md#buffer-manager
+                            // to see how you can use the BufferManager to fetch a page.
+                            )){
+
+            }else{
+                // Else, REDO!
+            }
+        }
+
+
+
+        while (this.logManager.scanFrom(lowestRecLSN).hasNext()){
+
+        }
+
+
+
+
+            return;
     }
 
     /**
