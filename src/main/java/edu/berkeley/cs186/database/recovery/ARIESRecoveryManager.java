@@ -535,12 +535,22 @@ public class ARIESRecoveryManager implements RecoveryManager {
         long clrLSN = -1L;
         LogRecord logRecord;
 
+
         while (lastLSN > savepointLSN) {
             // System.out.println("lastLSN: " + lastLSN);
 
             logRecord = this.logManager.fetchLogRecord(lastLSN);
 //            System.out.println("fetch");
             // only records that are undoable should be undone
+
+//            System.out.println("lastLSN before loop: " + lastLSN);
+//            if (logRecord.getUndoNextLSN().isPresent()) {
+//                System.out.println("Special loop entered");
+//                lastLSN = logRecord.getUndoNextLSN().get();
+//                logRecord = this.logManager.fetchLogRecord(lastLSN);
+//            }
+//            System.out.println("lastLSN after loop: " + lastLSN);
+
 
             if(logRecord.isUndoable()) {
                 // last LSN for CLR, i.e. lastLSN of the transaction
@@ -552,7 +562,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 // Emit CLR
 
                 clrLSN = this.logManager.appendToLog(clr);
-                
+
                 // Replaced the above commented out code with the following code:
                 // Check for special dirty page table updates for UndoUpdatePageRecord and for UndoAllocPageRecord.
                 // ie. We only update the dirty page table if we are undoing a page update
@@ -588,7 +598,16 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 transactionEntry.lastLSN = clrLSN;
 
             }
+
             lastLSN = logRecord.getPrevLSN().get();
+
+            // The following loop is to take into account Nested Rollbacks to save on redos
+            // Logic: taking the latest record, getting its undoNextLSN, and then start rolling back from that
+            // record on instead of rolling back on the already rolled-back LSNs by a previous parent nested rollback
+            if (logRecord.getUndoNextLSN().isPresent()) {
+                System.out.println("Special loop entered");
+                lastLSN = logRecord.getUndoNextLSN().get();
+            }
 
         }
 
