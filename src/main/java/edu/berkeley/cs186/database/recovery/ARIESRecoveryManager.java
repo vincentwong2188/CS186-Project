@@ -16,6 +16,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import javax.swing.event.AncestorEvent;
+
 /**
  * Implementation of ARIES.
  */
@@ -717,6 +719,34 @@ public class ARIESRecoveryManager implements RecoveryManager {
      * Then, cleanup and end transactions that are in the COMMITING state, and
      * move all transactions in the RUNNING state to RECOVERY_ABORTING.
      */
+    /** Type of LogRecords
+     * Transaction Operations:
+     *      Partition-Related Log Records:
+     *          AllocPartLogRecord
+     *          FreePartLogRecord
+     *          UndoAllocPartLogRecord
+     *          UndoFreePartLogRecord
+     *      Page-Related Log Records:
+     *          Updates:
+     *              UpdatePageLogRecord
+     *              UndoUpdatePageLogRecord
+     *          Non-Updates:
+     *              AllocPageLogRecord
+     *              FreePageLogRecord
+     *              UndoAllocPageLogRecord
+     *              UndoFreePageLogRecord
+     * 
+     * Transaction Status Changes:
+     *      AbortTransactionLogRecord
+     *      CommitTransactionLogRecord
+     *      EndTransactionLogRecord
+     * 
+     * Checkpoint Record:
+     *      BeginCheckpointLogRecord
+     *      EndCheckpointLogRecord
+     * Misc:
+     *      MasterLogRecord
+     */
     void restartAnalysis() {
         // Read master record
         LogRecord record = logManager.fetchLogRecord(0L);
@@ -724,11 +754,122 @@ public class ARIESRecoveryManager implements RecoveryManager {
         // Type casting
         assert (record.getType() == LogType.MASTER);
         MasterLogRecord masterRecord = (MasterLogRecord) record;
-        // Get start checkpoint LSN
+        // Get start(begin) checkpoint LSN
         long LSN = masterRecord.lastCheckpointLSN;
 
         // TODO(proj5): implement
-        return;
+        Iterator<LogRecord> iter = this.logManager.scanFrom(LSN);
+
+        while (iter.hasNext()) {
+            LogRecord logRecord = iter.next();
+            /** If the log record is for a transaction operation:
+            * - update the transaction table
+            * - if it's page-related (as opposed to partition-related),
+            *   - add to touchedPages
+            *   - acquire X lock
+            *   - update DPT (alloc/free/undoalloc/undofree always flushes changes to disk)
+            */
+            // ? undoPart 
+            if (logRecord.getClass().getName().contains("Part") || logRecord.getClass().getName().contains("Page")) {
+                long transNum = logRecord.getTransNum().get();
+                // If the transaction is not in the transaction table, it should be added to the table 
+                // (the newTransaction function object can be used to create a Transaction object).
+                if (!this.transactionTable.containsKey(transNum)) {
+                    Transaction newXact = this.newTransaction.apply(transNum);
+                    this.transactionTable.put(transNum, new TransactionTableEntry(newXact));
+                }
+
+                // The lastLSN of the transaction should be updated.
+                this.transactionTable.get(transNum).lastLSN = logRecord.getLSN();
+
+                // If the log record is about a page (as opposed to the partition-related log records), 
+                // the page needs to be added to the touchedPages set in the transaction table entry 
+                // and the transaction needs to request an X lock on it.
+                if (logRecord.getClass().getName().contains("Page")) {
+                    long pageNum = logRecord.getPageNum().get();
+                    this.transactionTable.get(transNum).touchedPages.add(pageNum);
+
+                    LockContext lockContext = this.getPageLockContext(pageNum);
+                    this.acquireTransactionLock(this.transactionTable.get(transNum).transaction, lockContext, LockType.X);
+
+                    // Updates: UpdatePage/UndoUpdatePage both may dirty a page in memory, without flushing changes to disk.
+
+
+                    // Non-Updates: AllocPage/FreePage/UndoAllocPage/UndoFreePage all make their changes visible on disk immediately, 
+                    // and can be seen as flushing all changes at the time (including their own) to disk.
+
+
+
+                }
+
+
+
+            }
+
+            /** If the log record is for a change in transaction status:
+            * - clean up transaction (Transaction#cleanup) if END_TRANSACTION
+            * - update transaction status to COMMITTING/RECOVERY_ABORTING/COMPLETE
+            * - update the transaction table
+            */
+            if (logRecord.getClass().getName().contains("Transaction")) {
+                long transNum = logRecord.getTransNum().get();
+                if (logRecord.getClass().getName().contains("End")) {
+                    this.transactionTable.get(transNum).transaction.cleanup();
+                    this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMPLETE);
+                    this.transactionTable.remove(transNum);
+                } 
+                if (logRecord.getClass().getName().contains("Commit")) {
+                    this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMMITTING);
+                }
+                if (logRecord.getClass().getName().contains("Abort")) {
+                    this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.RECOVERY_ABORTING);
+                }
+            }
+
+            /** If the log record is a begin_checkpoint record:
+            * - Update the transaction counter */
+            if (logRecord.getClass().getName().contains("Begin")) {
+                this.updateTransactionCounter.accept(this.getTransactionCounter.get());
+            }
+
+            /** If the log record is an end_checkpoint record:
+             * - Copy all entries of checkpoint DPT (replace existing entries if any)
+             * - Update lastLSN to be the larger of the existing entry's (if any) and the checkpoint's;
+             *   add to transaction table if not already present.
+             * - Add page numbers from checkpoint's touchedPages to the touchedPages sets in the
+             *   transaction table if the transaction has not finished yet, and acquire X locks. */
+            if (logRecord.getClass().getName().contains("End")) {
+
+
+            }
+        }
+
+        /** Then, cleanup and end transactions that are in the COMMITING state, and
+        * move all transactions in the RUNNING state to RECOVERY_ABORTING. */
+        for (Map.Entry<Long, TransactionTableEntry> entry : transactionTable.entrySet()) {
+            long transNum = entry.getKey();
+            Transaction.Status status = entry.getValue().transaction.getStatus();
+            long xactLastLSN = this.transactionTable.get(transNum).lastLSN;
+            
+            if (status == Transaction.Status.COMMITTING) {
+                this.transactionTable.get(transNum).transaction.cleanup();
+                this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMPLETE);
+                EndTransactionLogRecord endTransactionLogRecord = new EndTransactionLogRecord(transNum, xactLastLSN);
+                this.logManager.appendToLog(endTransactionLogRecord);
+                this.transactionTable.remove(transNum);
+                
+            }
+            
+            if (status == Transaction.Status.RUNNING) {
+                this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.RECOVERY_ABORTING);
+                AbortTransactionLogRecord abortTransactionLogRecord = new AbortTransactionLogRecord(transNum, xactLastLSN);
+                this.logManager.appendToLog(abortTransactionLogRecord);
+            }
+
+        }
+        
+
+
     }
 
     /**
