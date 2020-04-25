@@ -484,6 +484,7 @@ public class TestRecoveryManager {
 
         // set up checks for redo - these get called in sequence with each
         // LogRecord#redo call
+
         setupRedoChecks(Arrays.asList((LogRecord record) -> assertEquals((long) LSNs.get(2),
                                       (long) record.LSN),
                                       (LogRecord record) -> assertEquals((long) LSNs.get(3), (long) record.LSN),

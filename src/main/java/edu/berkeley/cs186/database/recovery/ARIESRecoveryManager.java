@@ -937,56 +937,60 @@ public class ARIESRecoveryManager implements RecoveryManager {
         System.out.println("restartRedo entered");
 
         Long lowestRecLSN = Long.MAX_VALUE;
-
+        Long pageNum;
         // Obtain the lowest recLSN currently in the DPT
         for (Map.Entry<Long, Long> dirtyPage : this.dirtyPageTable.entrySet()) {
             Long recLSN = dirtyPage.getValue();
 
             if (recLSN < lowestRecLSN){
                 lowestRecLSN = recLSN;
+                pageNum = dirtyPage.getKey();
             }
         }
 
-        // Fetch the Log Record corresponding to that lowestRecLSN value.
-        // This is the first Log Record we start redoing from.
-        LogRecord logRecord = this.logManager.fetchLogRecord(lowestRecLSN);
 
-        redoTheLogRecord(logRecord, lowestRecLSN);
 
-        // Repeated Redo the next LogRecord in the log (in the direction towards the Crash)
-        // until we have no more next log records left
-        while (this.logManager.scanFrom(lowestRecLSN).hasNext()){
-            System.out.println("loop");
+        // Begin iterating through all log records,
+        // starting from the log record with the lowest recLSN value in the DPT
+        Iterator<LogRecord> logRecordIterator = this.logManager.scanFrom(lowestRecLSN);
 
-            LogRecord nextLogRecord = this.logManager.scanFrom(lowestRecLSN).next();
+        while (logRecordIterator.hasNext()){
+            LogRecord nextLogRecord = logRecordIterator.next();
             long nextLogRecordLSN = nextLogRecord.getLSN();
             redoTheLogRecord(nextLogRecord, nextLogRecordLSN);
-
         }
-
-        System.out.println("restartRedo exited");
     }
 
     void redoTheLogRecord(LogRecord logRecord, long lowestRecLSN){
         // Obtain the logRecord with the lowest recLSN value in the DPT
 
         System.out.println("inner redo entered");
-        long pageNum = logRecord.getPageNum().isPresent() ? logRecord.getPageNum().get() : -1L;
 
-        System.out.println("bufferManager entered");
-        Page page = bufferManager.fetchPage(dbContext, pageNum, true);
-        System.out.println("bufferManager exited");
+        /** What to do if !logRecord.getPageNum().isPresent()??*/
+        long pageNum = logRecord.getPageNum().isPresent() ? logRecord.getPageNum().get() : -1L;
+//        long partNum = logRecord.getPartNum().isPresent() ? logRecord.getPartNum().get() : -1L;
 
         long pageLSN;
 
-        page.pin();
-        try{
-            pageLSN = page.getPageLSN();
-            System.out.println("pageLSN: " + pageLSN);
-            System.out.println("lowestRecLSN: " + lowestRecLSN);
-        }finally{
-            page.unpin();
+        if (pageNum > -1L) {
+            System.out.println("bufferManager entered");
+            Page page = bufferManager.fetchPage(dbContext, pageNum, true);
+            System.out.println("bufferManager exited");
+
+            page.pin();
+            try {
+                pageLSN = page.getPageLSN();
+                System.out.println("pageLSN: " + pageLSN);
+                System.out.println("lowestRecLSN: " + lowestRecLSN);
+            } finally {
+                page.unpin();
+            }
+
+        } else{
+//            page = bufferManager.fetchNewPage(dbContext, (int) partNum, true);
+            pageLSN = 0;
         }
+
 
         
         // We redo a record only if it is a redoable record and
@@ -999,7 +1003,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 // REDO
                 System.out.println("Partition redo entered");
                 logRecord.redo(this.diskSpaceManager, this.bufferManager);
-                page.setPageLSN(lowestRecLSN);
+//                page.setPageLSN(lowestRecLSN);
 
                 //or it is any page-related record where the 3 conditions MUST apply
             } else if (((logRecord instanceof UpdatePageLogRecord) ||
@@ -1016,7 +1020,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 System.out.println("Page redo entered");
 
                 logRecord.redo(this.diskSpaceManager, this.bufferManager);
-                page.setPageLSN(lowestRecLSN);
+//                page.setPageLSN(lowestRecLSN);
 
 
             } else {
