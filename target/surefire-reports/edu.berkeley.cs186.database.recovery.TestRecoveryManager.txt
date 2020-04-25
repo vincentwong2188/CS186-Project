@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: edu.berkeley.cs186.database.recovery.TestRecoveryManager
 -------------------------------------------------------------------------------
-Tests run: 20, Failures: 7, Errors: 3, Skipped: 0, Time elapsed: 0.889 s <<< FAILURE! - in edu.berkeley.cs186.database.recovery.TestRecoveryManager
-testAnalysisCheckpoints1(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.063 s  <<< ERROR!
+Tests run: 20, Failures: 7, Errors: 3, Skipped: 0, Time elapsed: 1.063 s <<< FAILURE! - in edu.berkeley.cs186.database.recovery.TestRecoveryManager
+testAnalysisCheckpoints1(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.072 s  <<< ERROR!
 java.lang.NullPointerException
 	at edu.berkeley.cs186.database.recovery.ARIESRecoveryManager.restartAnalysis(ARIESRecoveryManager.java:817)
 	at edu.berkeley.cs186.database.recovery.TestRecoveryManager.runAnalysis(TestRecoveryManager.java:1577)
@@ -22,7 +22,7 @@ java.lang.NullPointerException
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testAnalysisCheckpoints2(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.041 s  <<< ERROR!
+testAnalysisCheckpoints2(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.047 s  <<< ERROR!
 java.lang.NullPointerException
 	at edu.berkeley.cs186.database.recovery.ARIESRecoveryManager.restartAnalysis(ARIESRecoveryManager.java:817)
 	at edu.berkeley.cs186.database.recovery.TestRecoveryManager.runAnalysis(TestRecoveryManager.java:1577)
@@ -64,7 +64,7 @@ junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testRestartAnalysis(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.039 s  <<< FAILURE!
+testRestartAnalysis(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.024 s  <<< FAILURE!
 java.lang.AssertionError: expected:<201> but was:<176>
 	at org.junit.Assert.fail(Assert.java:88)
 	at org.junit.Assert.failNotEquals(Assert.java:834)
@@ -86,7 +86,7 @@ java.lang.AssertionError: expected:<201> but was:<176>
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testUndoDPTAndFlush(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.046 s  <<< FAILURE!
+testUndoDPTAndFlush(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.027 s  <<< FAILURE!
 junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at junit.framework.Assert.fail(Assert.java:57)
 	at junit.framework.Assert.assertTrue(Assert.java:22)
@@ -108,7 +108,7 @@ junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testRestartRedo(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.02 s  <<< FAILURE!
+testRestartRedo(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.025 s  <<< FAILURE!
 junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at junit.framework.Assert.fail(Assert.java:57)
 	at junit.framework.Assert.assertTrue(Assert.java:22)
@@ -130,7 +130,7 @@ junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testRestartUndo(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.031 s  <<< FAILURE!
+testRestartUndo(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.034 s  <<< FAILURE!
 junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at junit.framework.Assert.fail(Assert.java:57)
 	at junit.framework.Assert.assertTrue(Assert.java:22)
@@ -152,7 +152,7 @@ junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testRestart(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.039 s  <<< ERROR!
+testRestart(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.027 s  <<< ERROR!
 java.util.NoSuchElementException
 	at edu.berkeley.cs186.database.common.iterator.IndexBacktrackingIterator.next(IndexBacktrackingIterator.java:45)
 	at edu.berkeley.cs186.database.common.iterator.ConcatBacktrackingIterator.next(ConcatBacktrackingIterator.java:42)
@@ -172,7 +172,7 @@ java.util.NoSuchElementException
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testSimpleRestart(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.026 s  <<< FAILURE!
+testSimpleRestart(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.024 s  <<< FAILURE!
 junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at junit.framework.Assert.fail(Assert.java:57)
 	at junit.framework.Assert.assertTrue(Assert.java:22)
@@ -194,7 +194,7 @@ junit.framework.AssertionFailedError: LogRecord#redo() not called enough times
 	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
 	at java.lang.Thread.run(Thread.java:748)
 
-testRestartCleanup1(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.034 s  <<< FAILURE!
+testRestartCleanup1(edu.berkeley.cs186.database.recovery.TestRecoveryManager)  Time elapsed: 0.037 s  <<< FAILURE!
 java.lang.AssertionError: expected:<{10000000002=64}> but was:<{}>
 	at org.junit.Assert.fail(Assert.java:88)
 	at org.junit.Assert.failNotEquals(Assert.java:834)
