@@ -793,12 +793,19 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     this.acquireTransactionLock(this.transactionTable.get(transNum).transaction, lockContext, LockType.X);
 
                     // Updates: UpdatePage/UndoUpdatePage both may dirty a page in memory, without flushing changes to disk.
+                    if (logRecord.getClass().getName().contains("Update")) {
+
+
+                    }
 
 
                     // Non-Updates: AllocPage/FreePage/UndoAllocPage/UndoFreePage all make their changes visible on disk immediately,
                     // and can be seen as flushing all changes at the time (including their own) to disk.
+                    else {
 
 
+
+                    }
 
                 }
 
@@ -828,8 +835,8 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
             /** If the log record is a begin_checkpoint record:
             * - Update the transaction counter */
-            if (logRecord.getClass().getName().contains("Begin")) {
-                this.updateTransactionCounter.accept(this.getTransactionCounter.get());
+            if (logRecord.getClass().getName().contains("BeginCheckpoint")) {
+                this.updateTransactionCounter.accept(logRecord.getMaxTransactionNum().get());
             }
 
             /** If the log record is an end_checkpoint record:
@@ -837,8 +844,50 @@ public class ARIESRecoveryManager implements RecoveryManager {
              * - Update lastLSN to be the larger of the existing entry's (if any) and the checkpoint's;
              *   add to transaction table if not already present.
              * - Add page numbers from checkpoint's touchedPages to the touchedPages sets in the
-             *   transaction table if the transaction has not finished yet, and acquire X locks. */
-            if (logRecord.getClass().getName().contains("End")) {
+             *   transaction table if the transaction has not finished yet (i.e. !COMPELTE), and acquire X locks. */
+            if (logRecord.getClass().getName().contains("EndCheckpoint")) {
+                Map<Long, Long> checkpointDPT = logRecord.getDirtyPageTable();
+                Map<Long, Pair<Transaction.Status, Long>> checkpointXactTable = logRecord.getTransactionTable();
+                Map<Long, List<Long>> touchedPagesMap = logRecord.getTransactionTouchedPages();
+
+                for (Map.Entry<Long, Long> dirtyPage : checkpointDPT.entrySet()) {
+                    long pageNum = dirtyPage.getKey();
+                    long recLSN = dirtyPage.getValue();
+        
+                    if (this.dirtyPageTable.containsKey(pageNum)) {
+                        this.dirtyPageTable.replace(pageNum, recLSN);
+                    }else{
+                        this.dirtyPageTable.put(pageNum, recLSN);
+                    }
+                }
+
+                for (Map.Entry<Long, Pair<Transaction.Status, Long>> xact : checkpointXactTable.entrySet()) { 
+                    long transNum = xact.getKey();
+                    long lastLSNinCheckPointRec = xact.getValue().getSecond();
+                    long lastLSNinXactTable = this.transactionTable.get(transNum).lastLSN;
+
+                    if (lastLSNinCheckPointRec > lastLSNinXactTable) {
+                        this.transactionTable.get(transNum).lastLSN = lastLSNinCheckPointRec;
+                    }
+                }
+
+                for (Map.Entry<Long, List<Long>> touchedPages : touchedPagesMap.entrySet()) {
+                    long transNum = touchedPages.getKey();
+                    List<Long> tps = touchedPages.getValue();
+                    TransactionTableEntry xactEntry = this.transactionTable.get(transNum);
+
+                    if (xactEntry.transaction.getStatus() != Transaction.Status.COMPLETE) {
+                        for (Long tpNum : tps) {
+                            LockContext lockContext = this.getPageLockContext(tpNum);
+                            if (lockContext.getExplicitLockType(xactEntry.transaction.getTransactionContext()) == LockType.X) {
+                                xactEntry.touchedPages.add(tpNum);
+                            }
+                        }
+
+                    }
+
+                }
+
 
 
             }
