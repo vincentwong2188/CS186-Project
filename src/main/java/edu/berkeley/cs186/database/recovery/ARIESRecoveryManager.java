@@ -769,10 +769,10 @@ public class ARIESRecoveryManager implements RecoveryManager {
             *   - acquire X lock
             *   - update DPT (alloc/free/undoalloc/undofree always flushes changes to disk)
             */
-            // ? undoPart 
+            // ? undoPart
             if (logRecord.getClass().getName().contains("Part") || logRecord.getClass().getName().contains("Page")) {
                 long transNum = logRecord.getTransNum().get();
-                // If the transaction is not in the transaction table, it should be added to the table 
+                // If the transaction is not in the transaction table, it should be added to the table
                 // (the newTransaction function object can be used to create a Transaction object).
                 if (!this.transactionTable.containsKey(transNum)) {
                     Transaction newXact = this.newTransaction.apply(transNum);
@@ -782,8 +782,8 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 // The lastLSN of the transaction should be updated.
                 this.transactionTable.get(transNum).lastLSN = logRecord.getLSN();
 
-                // If the log record is about a page (as opposed to the partition-related log records), 
-                // the page needs to be added to the touchedPages set in the transaction table entry 
+                // If the log record is about a page (as opposed to the partition-related log records),
+                // the page needs to be added to the touchedPages set in the transaction table entry
                 // and the transaction needs to request an X lock on it.
                 if (logRecord.getClass().getName().contains("Page")) {
                     long pageNum = logRecord.getPageNum().get();
@@ -795,7 +795,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     // Updates: UpdatePage/UndoUpdatePage both may dirty a page in memory, without flushing changes to disk.
 
 
-                    // Non-Updates: AllocPage/FreePage/UndoAllocPage/UndoFreePage all make their changes visible on disk immediately, 
+                    // Non-Updates: AllocPage/FreePage/UndoAllocPage/UndoFreePage all make their changes visible on disk immediately,
                     // and can be seen as flushing all changes at the time (including their own) to disk.
 
 
@@ -817,7 +817,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     this.transactionTable.get(transNum).transaction.cleanup();
                     this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMPLETE);
                     this.transactionTable.remove(transNum);
-                } 
+                }
                 if (logRecord.getClass().getName().contains("Commit")) {
                     this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMMITTING);
                 }
@@ -850,16 +850,16 @@ public class ARIESRecoveryManager implements RecoveryManager {
             long transNum = entry.getKey();
             Transaction.Status status = entry.getValue().transaction.getStatus();
             long xactLastLSN = this.transactionTable.get(transNum).lastLSN;
-            
+
             if (status == Transaction.Status.COMMITTING) {
                 this.transactionTable.get(transNum).transaction.cleanup();
                 this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMPLETE);
                 EndTransactionLogRecord endTransactionLogRecord = new EndTransactionLogRecord(transNum, xactLastLSN);
                 this.logManager.appendToLog(endTransactionLogRecord);
                 this.transactionTable.remove(transNum);
-                
+
             }
-            
+
             if (status == Transaction.Status.RUNNING) {
                 this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.RECOVERY_ABORTING);
                 AbortTransactionLogRecord abortTransactionLogRecord = new AbortTransactionLogRecord(transNum, xactLastLSN);
@@ -867,7 +867,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
             }
 
         }
-        
+
 
 
     }
@@ -885,12 +885,12 @@ public class ARIESRecoveryManager implements RecoveryManager {
     void restartRedo() {
         // TODO(proj5): implement
 
+        System.out.println("restartRedo entered");
+
         Long lowestRecLSN = Long.MAX_VALUE;
-        long pageNumForLowestRecLSN;
 
         // Obtain the lowest recLSN currently in the DPT
         for (Map.Entry<Long, Long> dirtyPage : this.dirtyPageTable.entrySet()) {
-//            long pageNum = dirtyPage.getKey();
             Long recLSN = dirtyPage.getValue();
 
             if (recLSN < lowestRecLSN){
@@ -898,47 +898,84 @@ public class ARIESRecoveryManager implements RecoveryManager {
             }
         }
 
-        // Obtain the logRecord with the lowest recLSN value in the DPT
+        // Fetch the Log Record corresponding to that lowestRecLSN value.
+        // This is the first Log Record we start redoing from.
         LogRecord logRecord = this.logManager.fetchLogRecord(lowestRecLSN);
 
+        redoTheLogRecord(logRecord, lowestRecLSN);
 
-        long pageNum = logRecord.getPageNum().isPresent()? logRecord.getPageNum().get() : -1L;
+        // Repeated Redo the next LogRecord in the log (in the direction towards the Crash)
+        // until we have no more next log records left
+        while (this.logManager.scanFrom(lowestRecLSN).hasNext()){
+            System.out.println("loop");
 
+            LogRecord nextLogRecord = this.logManager.scanFrom(lowestRecLSN).next();
+            long nextLogRecordLSN = nextLogRecord.getLSN();
+            redoTheLogRecord(nextLogRecord, nextLogRecordLSN);
+
+        }
+
+        System.out.println("restartRedo exited");
+    }
+
+    void redoTheLogRecord(LogRecord logRecord, long lowestRecLSN){
+        // Obtain the logRecord with the lowest recLSN value in the DPT
+
+        System.out.println("inner redo entered");
+        long pageNum = logRecord.getPageNum().isPresent() ? logRecord.getPageNum().get() : -1L;
+
+        System.out.println("bufferManager entered");
+        Page page = bufferManager.fetchPage(dbContext, pageNum, true);
+        System.out.println("bufferManager exited");
+
+        long pageLSN;
+
+        page.pin();
+        try{
+            pageLSN = page.getPageLSN();
+            System.out.println("pageLSN: " + pageLSN);
+            System.out.println("lowestRecLSN: " + lowestRecLSN);
+        }finally{
+            page.unpin();
+        }
+
+        
         // We redo a record only if it is a redoable record and
-        if (logRecord.isRedoable() &&
-                // either it is a partition-related record, or it is a page-related record
-                !(logRecord instanceof AbortTransactionLogRecord) &&
-                !(logRecord instanceof CommitTransactionLogRecord) &&
-                !(logRecord instanceof EndTransactionLogRecord) &&
-                !(logRecord instanceof BeginCheckpointLogRecord) &&
-                !(logRecord instanceof EndCheckpointLogRecord) &&
-                !(logRecord instanceof MasterLogRecord)){
+        if (logRecord.isRedoable()) {
+            // either it is a partition-related record, or it is a page-related record
+            if ((logRecord instanceof AllocPartLogRecord) ||
+                    (logRecord instanceof FreePartLogRecord) ||
+                    (logRecord instanceof UndoAllocPartLogRecord) ||
+                    (logRecord instanceof UndoFreePartLogRecord)) {
+                // REDO
+                System.out.println("Partition redo entered");
+                logRecord.redo(this.diskSpaceManager, this.bufferManager);
+                page.setPageLSN(lowestRecLSN);
 
-            // Only redo under the following conditions
-            if ( (this.dirtyPageTable.containsKey(pageNum)) &&
-                    (this.dirtyPageTable.get(pageNum) <= lowestRecLSN) &&
-                    ( 1==1 // TODO
-                            // REFER TO PAGE class
-                            //getPageLSN() can be found in the Page class.
-                            // Check out https://github.com/berkeley-cs186/sp20-moocbase/blob/master/proj5-README.md#buffer-manager
-                            // to see how you can use the BufferManager to fetch a page.
-                            )){
+                //or it is any page-related record where the 3 conditions MUST apply
+            } else if (((logRecord instanceof UpdatePageLogRecord) ||
+                    (logRecord instanceof UndoUpdatePageLogRecord) ||
+                    (logRecord instanceof AllocPageLogRecord) ||
+                    (logRecord instanceof UndoAllocPageLogRecord) ||
+                    (logRecord instanceof UndoFreePageLogRecord)) &&
+                    ((this.dirtyPageTable.containsKey(pageNum)) &&
+                            (this.dirtyPageTable.get(pageNum) <= lowestRecLSN)
+                            && (pageLSN < lowestRecLSN)
+                    )) {
 
-            }else{
-                // Else, REDO!
+                // REDO
+                System.out.println("Page redo entered");
+
+                logRecord.redo(this.diskSpaceManager, this.bufferManager);
+                page.setPageLSN(lowestRecLSN);
+
+
+            } else {
+                System.out.println("Do nothing entered");
+
+                // Else, DONT REDO! ie. skip this logRecord
             }
         }
-
-
-
-        while (this.logManager.scanFrom(lowestRecLSN).hasNext()){
-
-        }
-
-
-
-
-            return;
     }
 
     /**
