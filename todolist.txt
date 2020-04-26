@@ -28,7 +28,7 @@ All in ARIESRecoveryManager.java
 
 - restart()
 - restartAnalysis(): 
-    Left with testRestartAnalysis()
+    DONE
 - restartRedo() : testRestartRedo() passes but function still conceptually a bit wrong
     * Added helper function redoTheLogRecord() to be iterated per log record.
     * Added check for situations when we don't undo [DONE]

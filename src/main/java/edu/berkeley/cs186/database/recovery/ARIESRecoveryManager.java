@@ -798,10 +798,16 @@ public class ARIESRecoveryManager implements RecoveryManager {
                         this.dirtyPageTable.put(pageNum, logRecord.LSN);
                     }
 
+
                     // Non-Updates: AllocPage/FreePage/UndoAllocPage/UndoFreePage all make their changes visible on disk immediately,
                     // and can be seen as flushing all changes at the time (including their own) to disk.
                     if (!logRecord.getClass().getName().contains("Update")) {
                         this.logManager.flushToLSN(logRecord.LSN);
+
+                        if((logRecord.getClass().getName().contains("Free") && !logRecord.getClass().getName().contains("Undo"))
+                            || logRecord.getClass().getName().contains("UndoAlloc")) {
+                                this.dirtyPageTable.remove(pageNum);
+                            }
                     }
                 }
             }
@@ -950,7 +956,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
             if (status == Transaction.Status.RUNNING) {
                 this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.RECOVERY_ABORTING);
                 AbortTransactionLogRecord abortTransactionLogRecord = new AbortTransactionLogRecord(transNum, xactLastLSN);
-                this.logManager.appendToLog(abortTransactionLogRecord);
+                this.transactionTable.get(transNum).lastLSN = this.logManager.appendToLog(abortTransactionLogRecord);
             }
 
         }
