@@ -1101,6 +1101,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         // Creating a sub-class to store Key-Value Pairs of the transaction table
         class ToUndoEntry implements Comparable<ToUndoEntry>{
+
             public long XID;
             public long lastLSN;
 
@@ -1127,7 +1128,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         // Creating a Priority Queue sorted on lastLSN of all aborting transactions
         PriorityQueue<ToUndoEntry> toUndo = new PriorityQueue<>();
-        System.out.println("Priority Queue Created");
 
         for (Map.Entry<Long, TransactionTableEntry> entry : transactionTable.entrySet()) {
             long xactNum = entry.getKey();
@@ -1139,7 +1139,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
             if (status == Transaction.Status.RECOVERY_ABORTING){
                 ToUndoEntry toUndoEntry = new ToUndoEntry(xactNum, lastLSN);
                 toUndo.add(toUndoEntry);
-                System.out.println("Aborting xacts added into Priority Queue");
             }
         }
 
@@ -1152,6 +1151,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
             System.out.println("logRecordLSN: "+ logRecordLSN);
 
+            TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
             LogRecord thisLR = this.logManager.fetchLogRecord(logRecordLSN);
 
             // thisLR.type == CLR:
@@ -1174,49 +1174,53 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 // thisLR.undoNextLSN == NULL:
                 }else {
                     //Write an End Record for thisLR.xid in the log
-                    EndTransactionLogRecord endTransactionLR = new EndTransactionLogRecord(XID, logRecordLSN);
-                    this.logManager.appendToLog(endTransactionLR);
-
-                    TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
-                    transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
-
+                    writeEndRecord(XID, transactionEntry.lastLSN);
                 }
             }
 
-            // thisLR.type == UPDATE:
+            // thisLR.type != CLR:
             else {
 
                 // Filters out Transaction Status Log Records and Checkpoint Log Records since they're not undoable
                 if (thisLR.isUndoable()) {
+                    // Pertains to UPDATE Log Records
 
                     // Write a CLR for the undo in the log
-
-                    System.out.println(thisLR.type);
-
-                    Pair<LogRecord, Boolean> p = thisLR.undo(logRecordLSN);
+                    Pair<LogRecord, Boolean> p = thisLR.undo(transactionEntry.lastLSN);
                     LogRecord CLR = p.getFirst();
                     long pageNum = CLR.getPageNum().isPresent() ? CLR.getPageNum().get() : -1L;
                     long clrLSN = this.logManager.appendToLog(CLR);
 
-                    // Update the transaction table right after appendeding the CLR to the logManager
+                    System.out.println("clrLSN: " + clrLSN);
+
+                    // Update the transaction table right after appending the CLR to the logManager
                     // and before calling redo() on the CLR.
-                    TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
                     transactionEntry.lastLSN = clrLSN;
 
+                    // TODO: Update Dirty Page Table after the undo. Needed to pass testUndoDPTAndFlush()
+
+//                    if (CLR instanceof UndoUpdatePageLogRecord) {
+//                        // add edited page (if it exists) by CLR into DPT
+//                        if (!this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
+//                            this.dirtyPageTable.put(pageNum, clrLSN);
+//                        }
+//                    }else if (CLR instanceof UndoAllocPageLogRecord || CLR instanceof UndoFreePageLogRecord){
+//                        if (this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
+//                            this.dirtyPageTable.remove(pageNum);
+//                        }
+//                    }
+
+                    // Flushing requirements
                     if (p.getSecond()) {
                         this.logManager.flushToLSN(CLR.getLSN());
                     }
 
-
                     // Undo the update in the database
                     CLR.redo(diskSpaceManager, bufferManager);
-
-
 
                     // NOTE: The undo method of LogRecord does not actually undo changes - it instead returns the
                     // compensation log record and a boolean flag indicating whether the log must be flushed after
                     // performing the undo. To actually undo changes, you will need to call redo on the returned CLR.
-
                 }
 
                 // if thisLR.prevLSN != NULL:
@@ -1228,21 +1232,16 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     toUndo.add(toUndoEntry);
                 }
 
-                // elif thisLR.prevLSN == NULL:
+                // else if thisLR.prevLSN == NULL:
                 else if(!thisLR.getPrevLSN().isPresent()){
-
                     // write an END record for thisLR.xid in the log
-                    EndTransactionLogRecord endTransactionLR = new EndTransactionLogRecord(XID, logRecordLSN);
-                    this.logManager.appendToLog(endTransactionLR);
+                    writeEndRecord(XID, transactionEntry.lastLSN);
 
-                    TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
-                    transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
                 }
 
             }
 
         }
-
 
         return;
     }
@@ -1251,6 +1250,14 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
     // Helpers ///////////////////////////////////////////////////////////////////////////////
 
+    private void writeEndRecord (long XID, long logRecordLSN){
+        EndTransactionLogRecord endTransactionLR = new EndTransactionLogRecord(XID, logRecordLSN);
+        this.logManager.appendToLog(endTransactionLR);
+
+        TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
+        transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
+        this.transactionTable.remove(XID);
+    }
 
     /**
      * Returns the lock context for a given page number.

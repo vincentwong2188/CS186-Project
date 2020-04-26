@@ -516,10 +516,17 @@ public class TestRecoveryManager {
         LSNs.add(logManager
                  .appendToLog(new UpdatePageLogRecord(1L, 10000000003L, LSNs.get(1), (short) 2, before,
                               after))); // 2
+
+//        System.out.println("LSNs before shuffle: "+ LSNs);
+//        Collections.shuffle(LSNs);
+//        System.out.println("LSNs shuffled: "+ LSNs);
+
         LSNs.add(logManager
                  .appendToLog(new UpdatePageLogRecord(1L, 10000000004L, LSNs.get(2), (short) 3, before,
                               after))); // 3
         LSNs.add(logManager.appendToLog(new AbortTransactionLogRecord(1L, LSNs.get(3)))); // 4
+
+//        System.out.println("Final LSNs: "+ LSNs);
 
         // actually do the writes
         for (int i = 0; i < 4; ++i) {
