@@ -1238,10 +1238,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
         }
 
 
-
-
-
-
         return;
     }
 
