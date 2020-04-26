@@ -18,6 +18,8 @@ import java.util.function.Supplier;
 
 import javax.swing.event.AncestorEvent;
 
+import org.omg.CORBA.Request;
+
 /**
  * Implementation of ARIES.
  */
@@ -763,6 +765,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         while (iter.hasNext()) {
             LogRecord logRecord = iter.next();
+            System.out.println("logRecord: " + logRecord);
             /** If the log record is for a transaction operation:
             * - update the transaction table
             * - if it's page-related (as opposed to partition-related),
@@ -770,14 +773,13 @@ public class ARIESRecoveryManager implements RecoveryManager {
             *   - acquire X lock
             *   - update DPT (alloc/free/undoalloc/undofree always flushes changes to disk)
             */
-            // ? undoPart
+            // apparantly in analysis() we do not have to take into account undos
             if (logRecord.getClass().getName().contains("Part") || logRecord.getClass().getName().contains("Page")) {
                 long transNum = logRecord.getTransNum().get();
                 // If the transaction is not in the transaction table, it should be added to the table
                 // (the newTransaction function object can be used to create a Transaction object).
                 if (!this.transactionTable.containsKey(transNum)) {
-                    Transaction newXact = this.newTransaction.apply(transNum);
-                    this.transactionTable.put(transNum, new TransactionTableEntry(newXact));
+                    this.startTransaction(this.newTransaction.apply(transNum));
                 }
 
                 // The lastLSN of the transaction should be updated.
@@ -793,25 +795,16 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     LockContext lockContext = this.getPageLockContext(pageNum);
                     this.acquireTransactionLock(this.transactionTable.get(transNum).transaction, lockContext, LockType.X);
 
-                    // Updates: UpdatePage/UndoUpdatePage both may dirty a page in memory, without flushing changes to disk.
-                    if (logRecord.getClass().getName().contains("Update")) {
-
-
+                    if (!this.dirtyPageTable.containsKey(pageNum)) {
+                        this.dirtyPageTable.put(pageNum, logRecord.LSN);
                     }
-
 
                     // Non-Updates: AllocPage/FreePage/UndoAllocPage/UndoFreePage all make their changes visible on disk immediately,
                     // and can be seen as flushing all changes at the time (including their own) to disk.
-                    else {
-
-
-
+                    if (!logRecord.getClass().getName().contains("Update")) {
+                        this.logManager.flushToLSN(logRecord.LSN);
                     }
-
                 }
-
-
-
             }
 
             /** If the log record is for a change in transaction status:
@@ -821,15 +814,23 @@ public class ARIESRecoveryManager implements RecoveryManager {
             */
             if (logRecord.getClass().getName().contains("Transaction")) {
                 long transNum = logRecord.getTransNum().get();
+                // edge case
+                if (!this.transactionTable.containsKey(transNum)) {
+                    this.startTransaction(this.newTransaction.apply(transNum));
+                }
+
+                // The lastLSN of the transaction should be updated.
+                this.transactionTable.get(transNum).lastLSN = logRecord.getLSN();
+
                 if (logRecord.getClass().getName().contains("End")) {
                     this.transactionTable.get(transNum).transaction.cleanup();
                     this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMPLETE);
                     this.transactionTable.remove(transNum);
                 }
-                if (logRecord.getClass().getName().contains("Commit")) {
+                else if (logRecord.getClass().getName().contains("Commit")) {
                     this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.COMMITTING);
                 }
-                if (logRecord.getClass().getName().contains("Abort")) {
+                else if (logRecord.getClass().getName().contains("Abort")) {
                     this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.RECOVERY_ABORTING);
                 }
             }
@@ -851,41 +852,78 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 Map<Long, Pair<Transaction.Status, Long>> checkpointXactTable = logRecord.getTransactionTable();
                 Map<Long, List<Long>> touchedPagesMap = logRecord.getTransactionTouchedPages();
 
+                System.out.println("EndCheckpoint Record LSN: " + logRecord.getLSN());
+
                 for (Map.Entry<Long, Long> dirtyPage : checkpointDPT.entrySet()) {
                     long pageNum = dirtyPage.getKey();
                     long recLSN = dirtyPage.getValue();
         
                     if (this.dirtyPageTable.containsKey(pageNum)) {
                         this.dirtyPageTable.replace(pageNum, recLSN);
-                    }else{
+                    } else {
                         this.dirtyPageTable.put(pageNum, recLSN);
                     }
+
+                    System.out.println("DPT - Page #, lastLSN:");
+                    System.out.println(pageNum);
+                    System.out.println(this.dirtyPageTable.get(pageNum));
                 }
 
                 for (Map.Entry<Long, Pair<Transaction.Status, Long>> xact : checkpointXactTable.entrySet()) { 
                     long transNum = xact.getKey();
+                    // edge case
+                    if (!this.transactionTable.containsKey(transNum)) {
+                        this.startTransaction(this.newTransaction.apply(transNum));
+                    }
+
+                    // NOTE: if earlier log record is an abort, consider that first!!
+                    Transaction.Status statusinCheckPointRec = xact.getValue().getFirst();
                     long lastLSNinCheckPointRec = xact.getValue().getSecond();
                     long lastLSNinXactTable = this.transactionTable.get(transNum).lastLSN;
 
-                    if (lastLSNinCheckPointRec > lastLSNinXactTable) {
+                    
+
+                    // ! HIDDEN CASE
+                    // ? Not sure what transactions should we check on
+                    if (lastLSNinCheckPointRec > lastLSNinXactTable || statusinCheckPointRec == Transaction.Status.ABORTING) {
                         this.transactionTable.get(transNum).lastLSN = lastLSNinCheckPointRec;
+                        if (statusinCheckPointRec == Transaction.Status.ABORTING) {
+                            this.transactionTable.get(transNum).transaction.setStatus(Transaction.Status.RECOVERY_ABORTING);
+                        }
+                           
                     }
+
+                    System.out.println("Transaction Table - Transaction #, lastLSN, Status:");
+                    System.out.println(transNum);
+                    System.out.println(this.transactionTable.get(transNum).lastLSN);
+                    System.out.println(this.transactionTable.get(transNum).transaction.getStatus());
                 }
 
                 for (Map.Entry<Long, List<Long>> touchedPages : touchedPagesMap.entrySet()) {
                     long transNum = touchedPages.getKey();
                     List<Long> tps = touchedPages.getValue();
                     TransactionTableEntry xactEntry = this.transactionTable.get(transNum);
+                    System.out.println("transNum: " + transNum);
+                    System.out.println("tps: " + tps);
+                    System.out.println("xactEntry.touchedPages: " + xactEntry.touchedPages);
+                    System.out.println(this.lockRequests);
 
                     if (xactEntry.transaction.getStatus() != Transaction.Status.COMPLETE) {
                         for (Long tpNum : tps) {
-                            LockContext lockContext = this.getPageLockContext(tpNum);
-                            if (lockContext.getExplicitLockType(xactEntry.transaction.getTransactionContext()) == LockType.X) {
+                            
+                            // System.out.println("tpNum: " + tpNum + ", LockType: " + lockContext.getExplicitLockType(xactEntry.transaction.getTransactionContext()));
+                            // System.out.println("-----");
+                            // System.out.println(transNum + ", " + tpNum);
+                            if (checkLockOnPageByXact(transNum, tpNum, "X")) {
                                 xactEntry.touchedPages.add(tpNum);
                             }
                         }
 
                     }
+
+                    System.out.println("Touched Pages - Transaction #, List of touched Pages:");
+                    System.out.println(transNum);
+                    System.out.println(xactEntry.touchedPages);
 
                 }
 
@@ -896,7 +934,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         /** Then, cleanup and end transactions that are in the COMMITING state, and
         * move all transactions in the RUNNING state to RECOVERY_ABORTING. */
-        for (Map.Entry<Long, TransactionTableEntry> entry : transactionTable.entrySet()) {
+        for (Map.Entry<Long, TransactionTableEntry> entry : this.transactionTable.entrySet()) {
             long transNum = entry.getKey();
             Transaction.Status status = entry.getValue().transaction.getStatus();
             long xactLastLSN = this.transactionTable.get(transNum).lastLSN;
@@ -918,6 +956,18 @@ public class ARIESRecoveryManager implements RecoveryManager {
 
         }
 
+    }
+
+    // Example this.lockRequest = [request 2 X(database/1/10000000005)]
+    boolean checkLockOnPageByXact(long transNum, long pageNum, String lockType) {
+        for(String req : this.lockRequests) {
+            System.out.println(req);
+            if (req.startsWith("request " + transNum) && req.endsWith(pageNum + ")")) {
+                return true;
+            }
+        }
+
+        return false;
 
 
     }
