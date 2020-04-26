@@ -404,7 +404,6 @@ public class TestRecoveryManager {
         assertEquals(new HashSet<>(Collections.singletonList(10000000001L)),
                      transactionTable.get(2L).touchedPages);
         assertTrue(transactionTable.containsKey(3L));
-        // System.out.println("assertTrue(transactionTable.get(3L).lastLSN > LSNs.get(7)): " + transactionTable.get(3L).lastLSN + ", " + LSNs.get(7));
         assertTrue(transactionTable.get(3L).lastLSN > LSNs.get(7));
         assertEquals(new HashSet<>(Collections.singletonList(10000000003L)),
                      transactionTable.get(3L).touchedPages);

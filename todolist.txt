@@ -27,19 +27,9 @@ d. Checkpoints
 All in ARIESRecoveryManager.java
 
 - restart()
-<<<<<<< HEAD
-- restartAnalysis(): ALL NOT TESTED
-    * Transaction Operations :: Part Records (NOT DONE, not sure on what to do with undoPart)
-    * Transaction Operations :: Page Records (NOT DONE on individual functionalities)
-    * Transaction Status Change Records (DONE)
-    * Checkpoint Records (DONE)
-    * Final Cleanup (DONE)
-- restartRedo() : testRestartRedo() PASSED
-=======
 - restartAnalysis(): 
-    Left with testRestartAnalysis()
-- restartRedo() : testRestartRedo() passes but function still conceptually a bit wrong
->>>>>>> f066b12d00d8e233672f707b4a5fd8af13c56e73
+    DONE
+- restartRedo() : testRestartRedo() PASSED
     * Added helper function redoTheLogRecord() to be iterated per log record.
     * Added check for situations when we don't undo [DONE]
 	* page in DPT [DONE]
