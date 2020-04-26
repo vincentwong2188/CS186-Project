@@ -404,6 +404,7 @@ public class TestRecoveryManager {
         assertEquals(new HashSet<>(Collections.singletonList(10000000001L)),
                      transactionTable.get(2L).touchedPages);
         assertTrue(transactionTable.containsKey(3L));
+        // System.out.println("assertTrue(transactionTable.get(3L).lastLSN > LSNs.get(7)): " + transactionTable.get(3L).lastLSN + ", " + LSNs.get(7));
         assertTrue(transactionTable.get(3L).lastLSN > LSNs.get(7));
         assertEquals(new HashSet<>(Collections.singletonList(10000000003L)),
                      transactionTable.get(3L).touchedPages);
@@ -1343,6 +1344,8 @@ public class TestRecoveryManager {
         LSNs.add(LSNs.get(20) + (new AbortTransactionLogRecord(0L, 0L)).toBytes().length); // 21
         LSNs.add(LSNs.get(21) + (new AbortTransactionLogRecord(0L, 0L)).toBytes().length); // 22
         logManager.rewriteMasterRecord(new MasterLogRecord(LSNs.get(5)));
+
+        System.out.println("LSNs: " + LSNs);
 
         // flush everything - recovery tests should always start
         // with a clean load from disk, and here we want everything sent to disk first.
