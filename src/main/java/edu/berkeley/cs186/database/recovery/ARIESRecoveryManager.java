@@ -128,6 +128,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
         transactionEntry.lastLSN = LSN;
 
         return LSN;
+
     }
 
     /**
@@ -957,55 +958,52 @@ public class ARIESRecoveryManager implements RecoveryManager {
         while (logRecordIterator.hasNext()){
             LogRecord nextLogRecord = logRecordIterator.next();
             long nextLogRecordLSN = nextLogRecord.getLSN();
+
+            // Helper Method
             redoTheLogRecord(nextLogRecord, nextLogRecordLSN);
         }
     }
 
+    // Helper Method
     void redoTheLogRecord(LogRecord logRecord, long lowestRecLSN){
         // Obtain the logRecord with the lowest recLSN value in the DPT
 
-        System.out.println("inner redo entered");
 
-        /** What to do if !logRecord.getPageNum().isPresent()??*/
         long pageNum = logRecord.getPageNum().isPresent() ? logRecord.getPageNum().get() : -1L;
-//        long partNum = logRecord.getPartNum().isPresent() ? logRecord.getPartNum().get() : -1L;
 
         long pageLSN;
+        Page page;
 
         if (pageNum > -1L) {
-            System.out.println("bufferManager entered");
-            Page page = bufferManager.fetchPage(dbContext, pageNum, true);
-            System.out.println("bufferManager exited");
+            page = bufferManager.fetchPage(dbContext, pageNum, true);
 
             page.pin();
             try {
                 pageLSN = page.getPageLSN();
-                System.out.println("pageLSN: " + pageLSN);
-                System.out.println("lowestRecLSN: " + lowestRecLSN);
+
             } finally {
                 page.unpin();
             }
 
         } else{
-//            page = bufferManager.fetchNewPage(dbContext, (int) partNum, true);
+            // Implies the log record is NOT a page-related record
+            page = null;
             pageLSN = 0;
         }
 
-
-        
-        // We redo a record only if it is a redoable record and
+        // We redo a record only if it is
+        // 1. A redoable record and
         if (logRecord.isRedoable()) {
-            // either it is a partition-related record, or it is a page-related record
+            // 2. Either it is a partition-related record, or it is a page-related record
             if ((logRecord instanceof AllocPartLogRecord) ||
                     (logRecord instanceof FreePartLogRecord) ||
                     (logRecord instanceof UndoAllocPartLogRecord) ||
                     (logRecord instanceof UndoFreePartLogRecord)) {
-                // REDO
-                System.out.println("Partition redo entered");
-                logRecord.redo(this.diskSpaceManager, this.bufferManager);
-//                page.setPageLSN(lowestRecLSN);
 
-                //or it is any page-related record where the 3 conditions MUST apply
+                // REDO
+                logRecord.redo(this.diskSpaceManager, this.bufferManager);
+
+                //or 3. It is any page-related record where the 3 conditions MUST apply
             } else if (((logRecord instanceof UpdatePageLogRecord) ||
                     (logRecord instanceof UndoUpdatePageLogRecord) ||
                     (logRecord instanceof AllocPageLogRecord) ||
@@ -1016,15 +1014,15 @@ public class ARIESRecoveryManager implements RecoveryManager {
                             && (pageLSN < lowestRecLSN)
                     )) {
 
-                // REDO
-                System.out.println("Page redo entered");
-
+                // REDO: Reapply logged action
                 logRecord.redo(this.diskSpaceManager, this.bufferManager);
-//                page.setPageLSN(lowestRecLSN);
 
+                if (page != null) {
+                    // Set pageLSN to LSN.
+                    page.setPageLSN(lowestRecLSN);
+                }
 
             } else {
-                System.out.println("Do nothing entered");
 
                 // Else, DONT REDO! ie. skip this logRecord
             }
@@ -1044,16 +1042,162 @@ public class ARIESRecoveryManager implements RecoveryManager {
      */
     void restartUndo() {
         // TODO(proj5): implement
+
+        // Creating a sub-class to store Key-Value Pairs of the transaction table
+        class ToUndoEntry implements Comparable<ToUndoEntry>{
+            public long XID;
+            public long lastLSN;
+
+            // Constructors, getters etc.
+
+            public ToUndoEntry(long XID, long lastLSN) {
+                this.XID = XID;
+                this.lastLSN = lastLSN;
+            }
+
+            @Override
+            public int compareTo(ToUndoEntry other) {
+
+                // Sorted in DESCENDING order, in preparation for priority queue later
+                if (this.lastLSN > other.lastLSN){
+                    return -1;
+                }else if (this.lastLSN == other.lastLSN){
+                    return 0;
+                }else{
+                    return 1;
+                }
+            }
+        }
+
+        // Creating a Priority Queue sorted on lastLSN of all aborting transactions
+        PriorityQueue<ToUndoEntry> toUndo = new PriorityQueue<>();
+        System.out.println("Priority Queue Created");
+
+        for (Map.Entry<Long, TransactionTableEntry> entry : transactionTable.entrySet()) {
+            long xactNum = entry.getKey();
+            TransactionTableEntry tableEntry = entry.getValue();
+            long lastLSN = tableEntry.lastLSN;
+            Transaction.Status status = tableEntry.transaction.getStatus();
+
+            // Extracting out all the aborting transactions
+            if (status == Transaction.Status.RECOVERY_ABORTING){
+                ToUndoEntry toUndoEntry = new ToUndoEntry(xactNum, lastLSN);
+                toUndo.add(toUndoEntry);
+                System.out.println("Aborting xacts added into Priority Queue");
+            }
+        }
+
+        while (!toUndo.isEmpty()){
+            System.out.println("Loop: Extracting out largest LSN");
+
+            ToUndoEntry xactTableEntryWithLargestLSN = toUndo.poll();
+            long XID = xactTableEntryWithLargestLSN.XID;
+            long logRecordLSN = xactTableEntryWithLargestLSN.lastLSN;
+
+            System.out.println("logRecordLSN: "+ logRecordLSN);
+
+            LogRecord thisLR = this.logManager.fetchLogRecord(logRecordLSN);
+
+            // thisLR.type == CLR:
+            if (thisLR instanceof UndoAllocPageLogRecord
+                    || thisLR instanceof UndoAllocPartLogRecord
+                    || thisLR instanceof UndoFreePageLogRecord
+                    || thisLR instanceof UndoFreePartLogRecord
+                    || thisLR instanceof UndoUpdatePageLogRecord){
+
+                System.out.println("Enters CLR Section");
+
+                // if thisLR.undoNextLSN != NULL:
+                if (thisLR.getUndoNextLSN().isPresent()){
+
+                    //toUndo.insert(thisLR.undoNextLSN)
+                    long LSN = thisLR.getUndoNextLSN().get();
+                    ToUndoEntry toUndoEntry = new ToUndoEntry(XID, LSN);
+                    toUndo.add(toUndoEntry);
+
+                // thisLR.undoNextLSN == NULL:
+                }else {
+                    //Write an End Record for thisLR.xid in the log
+                    EndTransactionLogRecord endTransactionLR = new EndTransactionLogRecord(XID, logRecordLSN);
+                    this.logManager.appendToLog(endTransactionLR);
+
+                    TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
+                    transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
+
+                }
+            }
+
+            // thisLR.type == UPDATE:
+            else {
+
+                // Filters out Transaction Status Log Records and Checkpoint Log Records since they're not undoable
+                if (thisLR.isUndoable()) {
+
+                    // Write a CLR for the undo in the log
+
+                    System.out.println(thisLR.type);
+
+                    Pair<LogRecord, Boolean> p = thisLR.undo(logRecordLSN);
+                    LogRecord CLR = p.getFirst();
+                    long pageNum = CLR.getPageNum().isPresent() ? CLR.getPageNum().get() : -1L;
+                    long clrLSN = this.logManager.appendToLog(CLR);
+
+                    // Update the transaction table right after appendeding the CLR to the logManager
+                    // and before calling redo() on the CLR.
+                    TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
+                    transactionEntry.lastLSN = clrLSN;
+
+                    if (p.getSecond()) {
+                        this.logManager.flushToLSN(CLR.getLSN());
+                    }
+
+
+                    // Undo the update in the database
+                    CLR.redo(diskSpaceManager, bufferManager);
+
+
+
+                    // NOTE: The undo method of LogRecord does not actually undo changes - it instead returns the
+                    // compensation log record and a boolean flag indicating whether the log must be flushed after
+                    // performing the undo. To actually undo changes, you will need to call redo on the returned CLR.
+
+                }
+
+                // if thisLR.prevLSN != NULL:
+                if (thisLR.getPrevLSN().isPresent()){
+
+                    //toUndo.insert(thisLR.prevLSN)
+                    long LSN = thisLR.getPrevLSN().get();
+                    ToUndoEntry toUndoEntry = new ToUndoEntry(XID, LSN);
+                    toUndo.add(toUndoEntry);
+                }
+
+                // elif thisLR.prevLSN == NULL:
+                else if(!thisLR.getPrevLSN().isPresent()){
+
+                    // write an END record for thisLR.xid in the log
+                    EndTransactionLogRecord endTransactionLR = new EndTransactionLogRecord(XID, logRecordLSN);
+                    this.logManager.appendToLog(endTransactionLR);
+
+                    TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
+                    transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
+                }
+
+            }
+
+        }
+
+
+
+
+
+
         return;
     }
 
     // TODO(proj5): add any helper methods needed
 
     // Helpers ///////////////////////////////////////////////////////////////////////////////
-
-
-
-
 
 
     /**
