@@ -29,15 +29,17 @@ All in ARIESRecoveryManager.java
 - restart()
 - restartAnalysis(): 
     DONE
-- restartRedo() : testRestartRedo() passes but function still conceptually a bit wrong
+- restartRedo() : testRestartRedo() PASSED
     * Added helper function redoTheLogRecord() to be iterated per log record.
     * Added check for situations when we don't undo [DONE]
 	* page in DPT [DONE]
 	* LSN not less than recLSN of page [DONE]
 	* pageLSN on page is strictly less than LSN of record [DONE]
-    * Add updating of pageLSN to LSN value [NOT DONE] 
-	(need to fix case where !logRecord.getPageNum().isPresent())
-- restartUndo()
+    * Add updating of pageLSN to LSN value [DONE] 
+- restartUndo() : 1/3 tests PASSED
+    * PASSED: testRestartUndo()
+    * FAILED: testUndoCLR()
+    * FAILED: testUndoDPTAndFlush()
 
 3. Tying it All Up
 

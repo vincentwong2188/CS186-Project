@@ -547,6 +547,7 @@ public class TestRecoveryManager {
         // set up checks for undo - these get called in sequence with each
         // LogRecord#redo call
         // (which should be called on CLRs)
+
         setupRedoChecks(Arrays.asList((LogRecord record) -> {
             assertEquals(LogType.UNDO_UPDATE_PAGE, record.getType());
             assertNotNull("log record not appended to log yet", record.LSN);
