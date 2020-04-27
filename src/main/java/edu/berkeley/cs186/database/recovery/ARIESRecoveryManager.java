@@ -1044,7 +1044,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
     void redoTheLogRecord(LogRecord logRecord, long lowestRecLSN){
         // Obtain the logRecord with the lowest recLSN value in the DPT
 
-
         long pageNum = logRecord.getPageNum().isPresent() ? logRecord.getPageNum().get() : -1L;
 
         long pageLSN;
@@ -1119,6 +1118,8 @@ public class ARIESRecoveryManager implements RecoveryManager {
     void restartUndo() {
         // TODO(proj5): implement
 
+        System.out.println("restartUndo entered");
+
         // Creating a sub-class to store Key-Value Pairs of the transaction table
         class ToUndoEntry implements Comparable<ToUndoEntry>{
 
@@ -1169,10 +1170,13 @@ public class ARIESRecoveryManager implements RecoveryManager {
             long XID = xactTableEntryWithLargestLSN.XID;
             long logRecordLSN = xactTableEntryWithLargestLSN.lastLSN;
 
+            System.out.println("XID: " + XID);
             System.out.println("logRecordLSN: "+ logRecordLSN);
 
             TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
             LogRecord thisLR = this.logManager.fetchLogRecord(logRecordLSN);
+
+            System.out.println("LR Type: " + thisLR.type);
 
             // thisLR.type == CLR:
             if (thisLR instanceof UndoAllocPageLogRecord
@@ -1194,6 +1198,8 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 // thisLR.undoNextLSN == NULL:
                 }else {
                     //Write an End Record for thisLR.xid in the log
+
+                    System.out.println("Enters first end");
                     writeEndRecord(XID, transactionEntry.lastLSN);
                 }
             }
@@ -1234,24 +1240,35 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 }
 
                 // if thisLR.prevLSN != NULL:
-                if (thisLR.getPrevLSN().isPresent()){
+//                if (thisLR.getPrevLSN().isPresent()){
+                if (thisLR.getPrevLSN().get() != 0){
 
                     //toUndo.insert(thisLR.prevLSN)
                     long LSN = thisLR.getPrevLSN().get();
+
                     ToUndoEntry toUndoEntry = new ToUndoEntry(XID, LSN);
                     toUndo.add(toUndoEntry);
                 }
 
                 // else if thisLR.prevLSN == NULL:
-                else if(!thisLR.getPrevLSN().isPresent()){
-                    // write an END record for thisLR.xid in the log
+                if(thisLR.getPrevLSN().get() == 0){
+
+                        // write an END record for thisLR.xid in the log
+                    System.out.println("Enters second end");
                     writeEndRecord(XID, transactionEntry.lastLSN);
 
                 }
 
             }
 
+            Iterator logManIt = this.logManager.iterator();
+
+            while (logManIt.hasNext()) {
+                System.out.println("Logman records: " + logManIt.next());
+            }
+
         }
+
 
         return;
     }
@@ -1261,12 +1278,15 @@ public class ARIESRecoveryManager implements RecoveryManager {
     // Helpers ///////////////////////////////////////////////////////////////////////////////
 
     private void writeEndRecord (long XID, long logRecordLSN){
+        System.out.println("Enters writeEndRecord");
+
         EndTransactionLogRecord endTransactionLR = new EndTransactionLogRecord(XID, logRecordLSN);
         this.logManager.appendToLog(endTransactionLR);
 
         TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
         transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
         this.transactionTable.remove(XID);
+
     }
 
     private void updateDPT(LogRecord CLR, long pageNum, long clrLSN){

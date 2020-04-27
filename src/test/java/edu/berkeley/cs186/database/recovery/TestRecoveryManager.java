@@ -686,28 +686,37 @@ public class TestRecoveryManager {
         assertEquals(LogType.ABORT_TRANSACTION, iter.next().getType());
 
         LogRecord record = iter.next();
+        System.out.println("record1: " + record);
+
         assertEquals(LogType.ABORT_TRANSACTION, record.getType());
         long LSN8 = record.LSN;
 
         record = iter.next();
+        System.out.println("record2: " + record);
+
         assertEquals(LogType.UNDO_UPDATE_PAGE, record.getType());
         assertEquals(LSN8, (long) record.getPrevLSN().orElseThrow(NoSuchElementException::new));
         assertEquals(LSNs[3], (long) record.getUndoNextLSN().orElseThrow(NoSuchElementException::new));
         long LSN9 = record.LSN;
 
         record = iter.next();
+        System.out.println("record3: " + record);
+
         assertEquals(LogType.UNDO_UPDATE_PAGE, record.getType());
         assertEquals(LSNs[7], (long) record.getPrevLSN().orElseThrow(NoSuchElementException::new));
         assertEquals(LSNs[1], (long) record.getUndoNextLSN().orElseThrow(NoSuchElementException::new));
         long LSN10 = record.LSN;
 
         record = iter.next();
+        System.out.println("record4: " + record);
         assertEquals(LogType.UNDO_UPDATE_PAGE, record.getType());
         assertEquals(LSN9, (long) record.getPrevLSN().orElseThrow(NoSuchElementException::new));
         assertEquals(0L, (long) record.getUndoNextLSN().orElseThrow(NoSuchElementException::new));
         assertEquals(LogType.END_TRANSACTION, iter.next().getType());
 
         record = iter.next();
+        System.out.println("record5: " + record);
+
         assertEquals(LogType.UNDO_UPDATE_PAGE, record.getType());
         assertEquals(LSN10, (long) record.getPrevLSN().orElseThrow(NoSuchElementException::new));
         assertEquals(0L, (long) record.getUndoNextLSN().orElseThrow(NoSuchElementException::new));
