@@ -77,6 +77,7 @@ edu/berkeley/cs186/database/query/SNLJOperator.class
 edu/berkeley/cs186/database/query/SortOperator.class
 edu/berkeley/cs186/database/memory/BufferManager.class
 edu/berkeley/cs186/database/table/RecordId.class
+edu/berkeley/cs186/database/recovery/ARIESRecoveryManager$1ToUndoEntry.class
 edu/berkeley/cs186/database/table/PageDirectory.class
 edu/berkeley/cs186/database/table/HeapFile.class
 edu/berkeley/cs186/database/table/stats/Histogram$1.class

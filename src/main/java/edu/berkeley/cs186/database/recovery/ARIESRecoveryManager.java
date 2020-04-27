@@ -677,7 +677,36 @@ public class ARIESRecoveryManager implements RecoveryManager {
     @Override
     public Runnable restart() {
         // TODO(proj5): implement
-        return () -> {};
+
+        restartAnalysis();
+        restartRedo();
+        /** any page in the dirty page table that isn't actually dirty (has changes in-memory that have not been flushed) should be removed from the dirty page table. 
+         * These pages may be present in the DPT as a result of the analysis phase, if we are uncertain about whether a change has been flushed to disk successfully or not.
+         */
+        /** Create an empty collection of dirty pageNums and add to it all pageNums of dirty pages in the buffer manager using iterPageNums(). 
+         * Then, modify dirtyPageTable so that it only contains the dirty pageNums in your collection. 
+         */
+
+        Set<Long> dirtyPageNums = new HashSet<>();
+
+        this.bufferManager.iterPageNums((framePageNum, isDirtyFrame) -> {
+            if (isDirtyFrame) {
+                dirtyPageNums.add(framePageNum);
+            }
+        });  
+
+        for (Map.Entry<Long, Long> dirtyPage : this.dirtyPageTable.entrySet()) {
+            long pageNum = dirtyPage.getKey();
+            if (!dirtyPageNums.contains(pageNum)) {
+                this.dirtyPageTable.remove(pageNum);
+            }
+        }
+
+        return () -> { 
+            this.restartUndo();
+            // To avoid having to abort all the transactions again should we crash, we take a checkpoint.
+            this.checkpoint();
+        };
     }
 
     /**
