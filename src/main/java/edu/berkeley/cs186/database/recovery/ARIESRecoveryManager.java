@@ -625,16 +625,7 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 // (as we are undoing the operation that allocated the page in the first place).
                 // For every other type of clr record, they either don't operate on pages or just don't concern
                 // the dirty page table; so in that case, we don't even need to worry about page num.
-                if (clr instanceof UndoUpdatePageLogRecord) {
-                    // add edited page (if it exists) by CLR into DPT
-                    if (!this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
-                        this.dirtyPageTable.put(pageNum, clrLSN);
-                    }
-                }else if (clr instanceof UndoAllocPageLogRecord || clr instanceof UndoFreePageLogRecord){
-                    if (this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
-                        this.dirtyPageTable.remove(pageNum);
-                    }
-                }
+                updateDPT( clr,  pageNum, clrLSN);
 
                 // call redo on return CLR
                 /** a boolean that is true
@@ -1197,18 +1188,8 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     // and before calling redo() on the CLR.
                     transactionEntry.lastLSN = clrLSN;
 
-                    // TODO: Update Dirty Page Table after the undo. Needed to pass testUndoDPTAndFlush()
-
-//                    if (CLR instanceof UndoUpdatePageLogRecord) {
-//                        // add edited page (if it exists) by CLR into DPT
-//                        if (!this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
-//                            this.dirtyPageTable.put(pageNum, clrLSN);
-//                        }
-//                    }else if (CLR instanceof UndoAllocPageLogRecord || CLR instanceof UndoFreePageLogRecord){
-//                        if (this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
-//                            this.dirtyPageTable.remove(pageNum);
-//                        }
-//                    }
+                    // Update Dirty Page Table after the undo. Needed to pass testUndoDPTAndFlush()
+                    updateDPT(CLR, pageNum, clrLSN);
 
                     // Flushing requirements
                     if (p.getSecond()) {
@@ -1257,6 +1238,20 @@ public class ARIESRecoveryManager implements RecoveryManager {
         TransactionTableEntry transactionEntry = this.transactionTable.get(XID);
         transactionEntry.transaction.setStatus(Transaction.Status.COMPLETE);
         this.transactionTable.remove(XID);
+    }
+
+    private void updateDPT(LogRecord CLR, long pageNum, long clrLSN){
+        if (CLR instanceof UndoUpdatePageLogRecord) {
+            // add edited page (if it exists) by CLR into DPT
+            if (!this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
+                this.dirtyPageTable.put(pageNum, clrLSN);
+            }
+        }
+        else if (CLR instanceof UndoAllocPageLogRecord || CLR instanceof UndoFreePageLogRecord){
+            if (this.dirtyPageTable.containsKey(pageNum) && pageNum > -1L) {
+                this.dirtyPageTable.remove(pageNum);
+            }
+        }
     }
 
     /**
