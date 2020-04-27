@@ -1148,10 +1148,10 @@ public class Database implements AutoCloseable {
 
             recoveryManager.commit(transNum);
 
-            this.cleanup();
-            /*
+//            this.cleanup();
+
             executor.execute(this::cleanup);
-            */
+
         }
 
         @Override
