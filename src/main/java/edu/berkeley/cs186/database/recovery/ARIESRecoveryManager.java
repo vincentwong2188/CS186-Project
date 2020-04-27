@@ -1251,7 +1251,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
                     writeEndRecord(XID, transactionEntry.lastLSN);
 
                 }
-
             }
         }
 
