@@ -1179,16 +1179,10 @@ public class ARIESRecoveryManager implements RecoveryManager {
             System.out.println("LR Type: " + thisLR.type);
 
             // thisLR.type == CLR:
-            if (thisLR instanceof UndoAllocPageLogRecord
-                    || thisLR instanceof UndoAllocPartLogRecord
-                    || thisLR instanceof UndoFreePageLogRecord
-                    || thisLR instanceof UndoFreePartLogRecord
-                    || thisLR instanceof UndoUpdatePageLogRecord){
-
-                System.out.println("Enters CLR Section");
+            if (thisLR.getUndoNextLSN().isPresent()){
 
                 // if thisLR.undoNextLSN != NULL:
-                if (thisLR.getUndoNextLSN().isPresent()){
+                if (thisLR.getUndoNextLSN().get() != 0){
 
                     //toUndo.insert(thisLR.undoNextLSN)
                     long LSN = thisLR.getUndoNextLSN().get();
@@ -1240,7 +1234,6 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 }
 
                 // if thisLR.prevLSN != NULL:
-//                if (thisLR.getPrevLSN().isPresent()){
                 if (thisLR.getPrevLSN().get() != 0){
 
                     //toUndo.insert(thisLR.prevLSN)
@@ -1251,22 +1244,15 @@ public class ARIESRecoveryManager implements RecoveryManager {
                 }
 
                 // else if thisLR.prevLSN == NULL:
-                if(thisLR.getPrevLSN().get() == 0){
+                else {
 
-                        // write an END record for thisLR.xid in the log
+                    // write an END record for thisLR.xid in the log
                     System.out.println("Enters second end");
                     writeEndRecord(XID, transactionEntry.lastLSN);
 
                 }
 
             }
-
-            Iterator logManIt = this.logManager.iterator();
-
-            while (logManIt.hasNext()) {
-                System.out.println("Logman records: " + logManIt.next());
-            }
-
         }
 
 
