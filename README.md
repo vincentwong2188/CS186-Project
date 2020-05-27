@@ -1,14 +1,8 @@
 # Project 5: Recovery
 
-This project is due: **Friday, 5/1/2020, 11:59 PM**.
-
 ## Overview
 
-In this project, you will implement write-ahead logging.
-
-## Prerequisites
-
-You should watch the Recovery lectures before working on this project.
+Write-ahead logging for a relational database will be implemented in this project.
 
 ## Getting Started
 
